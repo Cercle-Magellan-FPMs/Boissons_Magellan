@@ -4,9 +4,9 @@ import { getAdminToken, setAdminToken } from "./lib/api";
 import ProductsPage from "./pages/ProductsPage";
 import RestockPage from "./pages/RestockPage";
 import DebtsPage from "./pages/DebtsPage";
+import DebtSummaryPage from "./pages/DebtSummaryPage";
 
-
-type Page = "products" | "restock" | "debts";
+type Page = "products" | "restock" | "debts" | "summary";
 
 export default function App() {
   const [page, setPage] = useState<Page>("products");
@@ -25,6 +25,7 @@ export default function App() {
           <button onClick={() => setPage("products")} disabled={page === "products"}>Produits</button>
           <button onClick={() => setPage("restock")} disabled={page === "restock"}>Restock</button>
           <button onClick={() => setPage("debts")} disabled={page === "debts"}>Dettes</button>
+          <button onClick={() => setPage("summary")} disabled={page === "summary"}>Résumé</button>
         </nav>
       </header>
 
@@ -56,6 +57,7 @@ export default function App() {
         {page === "products" && <ProductsPage />}
         {page === "restock" && <RestockPage />}
         {page === "debts" && <DebtsPage />}
+        {page === "summary" && <DebtSummaryPage />}
       </main>
     </div>
   );
