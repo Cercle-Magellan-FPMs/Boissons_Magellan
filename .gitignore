@@ -1,0 +1,19 @@
+# Node
+node_modules/
+dist/
+build/
+.env
+.env.*
+*.log
+
+# DB / data
+backend/data/
+*.db
+*.db-shm
+*.db-wal
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
