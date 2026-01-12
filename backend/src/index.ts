@@ -1,6 +1,6 @@
+import "dotenv/config";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import "dotenv/config";
 import { initDB } from "./db/db.js";
 import { healthRoutes } from "./routes/health.js";
 import { kioskRoutes } from "./routes/kiosk.js";
