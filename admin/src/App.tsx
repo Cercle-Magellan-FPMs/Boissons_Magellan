@@ -3,8 +3,10 @@ import "./App.css";
 import { getAdminToken, setAdminToken } from "./lib/api";
 import ProductsPage from "./pages/ProductsPage";
 import RestockPage from "./pages/RestockPage";
+import DebtsPage from "./pages/DebtsPage";
 
-type Page = "products" | "restock";
+
+type Page = "products" | "restock" | "debts";
 
 export default function App() {
   const [page, setPage] = useState<Page>("products");
@@ -22,6 +24,7 @@ export default function App() {
         <nav style={{ display: "flex", gap: 8 }}>
           <button onClick={() => setPage("products")} disabled={page === "products"}>Produits</button>
           <button onClick={() => setPage("restock")} disabled={page === "restock"}>Restock</button>
+          <button onClick={() => setPage("debts")} disabled={page === "debts"}>Dettes</button>
         </nav>
       </header>
 
@@ -52,6 +55,7 @@ export default function App() {
       <main style={{ marginTop: 16 }}>
         {page === "products" && <ProductsPage />}
         {page === "restock" && <RestockPage />}
+        {page === "debts" && <DebtsPage />}
       </main>
     </div>
   );

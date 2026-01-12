@@ -7,6 +7,8 @@ import { kioskRoutes } from "./routes/kiosk.js";
 import { productRoutes } from "./routes/products.js";
 import { orderRoutes } from "./routes/order.js";
 import { adminRoutes } from "./routes/admin/admin.js";
+import { adminDebtRoutes } from "./routes/admin/debts.js";
+
 
 const app = Fastify({ logger: true });
 
@@ -23,6 +25,7 @@ app.register(kioskRoutes);
 app.register(productRoutes);
 app.register(orderRoutes);
 app.register(adminRoutes);
+app.register(adminDebtRoutes);
 
 const PORT = Number(process.env.PORT) || 3000;
 
