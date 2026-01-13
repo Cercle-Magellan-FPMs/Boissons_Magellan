@@ -165,7 +165,7 @@ export default function App() {
       setUser(null);
       setProducts([]);
       setCart({});
-      setStatus("Badgez pour commencer");
+      setStatus("Badgez ------pour commencer");
       setScreen("badge");
     }, 3000);
   }
