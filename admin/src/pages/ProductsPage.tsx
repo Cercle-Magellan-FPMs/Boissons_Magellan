@@ -8,8 +8,8 @@ export default function ProductsPage() {
   const [error, setError] = useState<string>("");
 
   const [newName, setNewName] = useState("");
-  const [newPrice, setNewPrice] = useState<number>(0);
-  const [newQty, setNewQty] = useState<number>(0);
+  const [newPrice, setNewPrice] = useState<number>();
+  const [newQty, setNewQty] = useState<number>();
   const [newSlug, setNewSlug] = useState("");
 
   async function load() {
@@ -117,32 +117,33 @@ export default function ProductsPage() {
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="Nom (ex: Sprite)"
-            style={{ padding: 8, minWidth: 220 }}
+            style={{ padding: 8, minWidth: 150 }}
           />
+          <p>Prix (en centimes) :</p>
           <input
             type="number"
             value={newPrice}
             onChange={(e) => setNewPrice(Number(e.target.value))}
-            placeholder="prix_cents"
-            style={{ padding: 8, width: 140 }}
+            placeholder="100 = 1€"
+            style={{ padding: 8, width: 110 }}
           />
+          
+          <p>Quantité initiale :</p>
           <input
             type="number"
             value={newQty}
             onChange={(e) => setNewQty(Number(e.target.value))}
             placeholder="stock initial"
-            style={{ padding: 8, width: 140 }}
+            style={{ padding: 8, width: 110 }}
           />
+          <p>Slug image :</p>
           <input
             value={newSlug}
             onChange={(e) => setNewSlug(e.target.value)}
-            placeholder="slug image (ex: coca-zero)"
-            style={{ padding: 8, minWidth: 200 }}
+            placeholder="Ex: coca-zero"
+            style={{ padding: 8, minWidth: 150 }}
           />
           <button onClick={addProduct} style={{ fontWeight: 800 }}>Ajouter</button>
-          <span style={{ opacity: 0.7 }}>
-            prix_cents : 110 = 1.10 EUR
-          </span>
         </div>
       </div>
 

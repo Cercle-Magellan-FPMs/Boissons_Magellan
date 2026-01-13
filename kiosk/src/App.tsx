@@ -215,7 +215,7 @@ export default function App() {
                     setStatus("Badgez pour commencer");
                   }}
                 >
-                  Deconnexion
+                  Déconnexion
                 </button>
               </div>
             </header>
@@ -298,8 +298,6 @@ export default function App() {
                     <button className="primary-button" onClick={submitOrder}>
                       Valider la commande
                     </button>
-
-                    <p className="cart-status">{status}</p>
                   </div>
                 )}
               </aside>
@@ -326,11 +324,11 @@ export default function App() {
             ) : (
               <div className="debt-grid">
                 <div className="debt-total">
-                  <span>Total impaye</span>
+                  <span>Dette totale</span>
                   <strong>{euros(debt.total_cents)}</strong>
                   <div className="debt-split">
-                    <span>Cloture impayee: {euros(debt.unpaid_closed_cents)}</span>
-                    <span>Depuis derniere cloture: {euros(debt.open_cents)}</span>
+                    <span>Dette impayée: {euros(debt.unpaid_closed_cents)}</span>
+                    <span>Dette en cours: {euros(debt.open_cents)}</span>
                   </div>
                 </div>
 
@@ -362,7 +360,7 @@ export default function App() {
           </section>
         )}
       </main>
-      <footer className="app-footer">developpe par Delens Raphael</footer>
+      <footer className="app-footer">Développé par Delens Raphaël</footer>
     </div>
   );
 }

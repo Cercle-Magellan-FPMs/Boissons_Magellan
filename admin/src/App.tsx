@@ -43,13 +43,13 @@ export default function App() {
               className={`nav-button ${page === "debts" ? "active" : ""}`}
               onClick={() => setPage("debts")}
             >
-              Dettes
+              Clôturer
             </button>
             <button
               className={`nav-button ${page === "summary" ? "active" : ""}`}
               onClick={() => setPage("summary")}
             >
-              Resume
+              Résumé des dettes
             </button>
             <button
               className={`nav-button ${page === "users" ? "active" : ""}`}
