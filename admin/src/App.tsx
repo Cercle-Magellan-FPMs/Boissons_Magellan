@@ -20,7 +20,7 @@ export default function App() {
         <header className="admin-header">
           <div className="brand">
             <div className="brand-title">
-              <img className="badge-logo" src={`${import.meta.env.BASE_URL}magellan-logo.png`} alt="Magellan" />
+              <img className="brand-logo" src={`${import.meta.env.BASE_URL}magellan-logo.png`} alt="Magellan" />
               <h1>Admin Boissons</h1>
               <span className="badge">Cercle Magellan</span>
             </div>
