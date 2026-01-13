@@ -141,7 +141,7 @@ export default function ProductsPage() {
             placeholder="stock initial"
             style={{ padding: 8, width: 110 }}
           />
-          <p>Slug image :</p>
+          <p>Slug image :</p> 
           <input
             value={newSlug}
             onChange={(e) => setNewSlug(e.target.value)}
