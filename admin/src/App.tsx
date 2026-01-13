@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import "./App.css";
 import { getAdminToken, setAdminToken } from "./lib/api";
 import ProductsPage from "./pages/ProductsPage";
@@ -12,7 +12,7 @@ type Page = "products" | "restock" | "debts" | "summary" | "users";
 export default function App() {
   const [page, setPage] = useState<Page>("products");
   const [tokenInput, setTokenInput] = useState(getAdminToken());
-  const tokenSaved = useMemo(() => getAdminToken(), [tokenInput]);
+  const [showTokenModal, setShowTokenModal] = useState(!getAdminToken());
 
   return (
     <div className="admin-app">
@@ -60,31 +60,6 @@ export default function App() {
           </nav>
         </header>
 
-        <section className="token-card">
-          <div className="token-row">
-            <div className="token-field">
-              <label>Token admin</label>
-              <input
-                type="password"
-                value={tokenInput}
-                onChange={(e) => setTokenInput(e.target.value)}
-                placeholder="x-admin-token"
-              />
-            </div>
-            <button
-              className="primary-button"
-              onClick={() => {
-                setAdminToken(tokenInput.trim());
-              }}
-            >
-              Enregistrer
-            </button>
-            <span className={`token-status ${tokenSaved ? "ok" : "warn"}`}>
-              {tokenSaved ? "Token present" : "Aucun token"}
-            </span>
-          </div>
-        </section>
-
         <main className="page-main">
           {page === "products" && <ProductsPage />}
           {page === "restock" && <RestockPage />}
@@ -94,6 +69,34 @@ export default function App() {
         </main>
       </div>
       <footer className="app-footer">Développé par Delens Raphaël</footer>
+
+      {showTokenModal && (
+        <div className="token-modal-backdrop">
+          <div className="token-modal">
+            <h2>Token admin</h2>
+            <p>Entrez le token pour acceder a l'interface admin.</p>
+            <input
+              type="password"
+              value={tokenInput}
+              onChange={(e) => setTokenInput(e.target.value)}
+              placeholder="x-admin-token"
+            />
+            <div className="token-modal-actions">
+              <button
+                className="primary-button"
+                onClick={() => {
+                  const token = tokenInput.trim();
+                  if (!token) return;
+                  setAdminToken(token);
+                  setShowTokenModal(false);
+                }}
+              >
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
