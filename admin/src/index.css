@@ -1,0 +1,98 @@
+:root {
+  --bg: #0f1214;
+  --bg-soft: #151a1f;
+  --panel: #161c21;
+  --panel-2: #1d242a;
+  --border: #2d3841;
+  --text: #f4f6f7;
+  --muted: #a8b0b7;
+  --accent: #f8be50;
+  --shadow: 0 18px 40px rgba(0, 0, 0, 0.25);
+
+  font-family: "Space Grotesk", "Sora", "Outfit", "Segoe UI", sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--text);
+  background-color: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 600px at 20% -10%, rgba(248, 190, 80, 0.18), transparent 60%),
+    radial-gradient(900px 500px at 90% 10%, rgba(88, 180, 190, 0.18), transparent 60%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0) 60%),
+    var(--bg);
+  color: var(--text);
+}
+
+#root {
+  width: 100%;
+}
+
+h1, h2, h3, h4 {
+  font-weight: 700;
+}
+
+button {
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 10px 16px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: inherit;
+  background-color: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+button:hover {
+  border-color: rgba(248, 190, 80, 0.5);
+  transform: translateY(-1px);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+input,
+select,
+textarea {
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  outline: none;
+}
+
+input::placeholder {
+  color: rgba(168, 176, 183, 0.7);
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible {
+  box-shadow: 0 0 0 3px rgba(248, 190, 80, 0.25);
+  border-color: rgba(248, 190, 80, 0.7);
+}
+
+section {
+  text-align: left;
+}

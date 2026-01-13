@@ -1,0 +1,86 @@
+:root {
+  --bg: #0b1415;
+  --panel: #111c1f;
+  --panel-2: #162328;
+  --border: #27363b;
+  --text: #f2f7f7;
+  --muted: #9eb0b3;
+  --accent: #00f5d4;
+  --accent-2: #ffc961;
+  --shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+
+  font-family: "IBM Plex Sans Condensed", "Manrope", "Segoe UI", sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--text);
+  background-color: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 700px at 10% -10%, rgba(0, 245, 212, 0.18), transparent 60%),
+    radial-gradient(900px 600px at 90% 10%, rgba(255, 201, 97, 0.16), transparent 60%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0)),
+    var(--bg);
+  color: var(--text);
+}
+
+#root {
+  width: 100%;
+}
+
+button {
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  padding: 10px 16px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: inherit;
+  background-color: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+button:hover {
+  border-color: rgba(0, 245, 212, 0.5);
+  transform: translateY(-1px);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+input,
+select,
+textarea {
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  outline: none;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible {
+  box-shadow: 0 0 0 3px rgba(0, 245, 212, 0.25);
+  border-color: rgba(0, 245, 212, 0.7);
+}
