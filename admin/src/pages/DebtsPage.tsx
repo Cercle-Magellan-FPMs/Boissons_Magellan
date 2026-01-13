@@ -27,6 +27,7 @@ export default function DebtsPage() {
   const [comment, setComment] = useState("");
 
   const [statusFilter, setStatusFilter] = useState<"invoiced" | "paid">("invoiced");
+  const [nameFilter, setNameFilter] = useState("");
   const [debts, setDebts] = useState<DebtRow[]>([]);
   const [msg, setMsg] = useState("");
 
@@ -68,6 +69,12 @@ export default function DebtsPage() {
 
   useEffect(() => { load(); }, [statusFilter]);
 
+  const filteredDebts = debts.filter(d =>
+    d.user_name.toLowerCase().includes(nameFilter.trim().toLowerCase())
+  );
+
+
+
   async function pay(d: DebtRow) {
     if (!confirm(`Marquer paye: ${d.user_name} (${periodLabel(d)}) = ${euros(d.amount_cents)} ?`)) return;
     try {
@@ -94,15 +101,15 @@ export default function DebtsPage() {
     }
   }
 
-  const total = debts.reduce((s, d) => s + d.amount_cents, 0);
+  const total = filteredDebts.reduce((s, d) => s + d.amount_cents, 0);
 
   return (
     <section style={{ display: "grid", gap: 12 }}>
       <h2 style={{ margin: 0 }}>Dettes</h2>
       <div style={{ padding: 12, border: "1px solid #333", borderRadius: 12 }}>
-        <h3 style={{ marginTop: 0 }}>Cloture de periode</h3>
+        <h3 style={{ marginTop: 0 }}>Clôture de période</h3>
         <p style={{ opacity: 0.7, marginTop: 0 }}>
-          La cloture prend la periode depuis la derniere cloture jusqu a maintenant.
+          La clôture prend la période depuis la dernière clôture jusqu'à maintenant.
         </p>
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -113,7 +120,7 @@ export default function DebtsPage() {
             style={{ padding: 8, minWidth: 240 }}
           />
           <button onClick={closePeriodAction} style={{ fontWeight: 900 }}>
-            Cloturer
+            Clôturer
           </button>
           {closeMsg && <span style={{ opacity: 0.85 }}>{closeMsg}</span>}
         </div>
@@ -121,17 +128,24 @@ export default function DebtsPage() {
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
         <label>
-          Statut{" "}
+          Statut : {" "}
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)}>
-            <option value="invoiced">Impayees</option>
-            <option value="paid">Payees</option>
+            <option value="invoiced">Impayées</option>
+            <option value="paid">Payées</option>
           </select>
         </label>
 
-        <button onClick={load}>Rafraichir</button>
+        <label>
+          Rechercher : {""}
+          <input
+            value={nameFilter}
+            onChange={(e) => setNameFilter(e.target.value)}
+            placeholder="Raphaël aka best admin"
+          />
+        </label>
 
         <span style={{ opacity: 0.7 }}>
-          Total affiche : <b>{euros(total)}</b>
+          Total affiché : <b>{euros(total)}</b>
         </span>
       </div>
 
@@ -142,7 +156,7 @@ export default function DebtsPage() {
       )}
 
       <div style={{ display: "grid", gap: 8 }}>
-        {debts.map((d) => (
+        {filteredDebts.map((d) => (
           <div
             key={`${d.period_id}-${d.user_id}`}
             style={{
@@ -180,7 +194,7 @@ export default function DebtsPage() {
           </div>
         ))}
 
-        {debts.length === 0 && <p style={{ opacity: 0.7 }}>Aucune dette trouvee.</p>}
+        {filteredDebts.length === 0 && <p style={{ opacity: 0.7 }}>Aucune dette trouvee.</p>}
       </div>
     </section>
   );

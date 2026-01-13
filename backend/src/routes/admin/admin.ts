@@ -194,7 +194,7 @@ export async function adminRoutes(app: FastifyInstance) {
     const schema = z.object({
       items: z.array(z.object({
         product_id: z.number().int().positive(),
-        qty: z.number().int().positive(),
+        qty: z.number().int().refine((value) => value !== 0, { message: "qty must be non-zero" }),
       })).min(1),
       comment: z.string().optional(),
     });
@@ -216,7 +216,7 @@ export async function adminRoutes(app: FastifyInstance) {
       );
       const insertMove = db.prepare(`
         INSERT INTO stock_moves (move_id, product_id, delta_qty, reason, ref_id, comment)
-        VALUES (?, ?, ?, 'restock', NULL, ?)
+        VALUES (?, ?, ?, ?, NULL, ?)
       `);
 
       for (const it of items) {
@@ -225,7 +225,8 @@ export async function adminRoutes(app: FastifyInstance) {
 
         ensureStockRow.run(it.product_id);
         updateStock.run(it.qty, it.product_id);
-        insertMove.run(moveId, it.product_id, it.qty, comment ?? null);
+        const reason = it.qty > 0 ? "restock" : "correction";
+        insertMove.run(moveId, it.product_id, it.qty, reason, comment ?? null);
       }
 
       return moveId;

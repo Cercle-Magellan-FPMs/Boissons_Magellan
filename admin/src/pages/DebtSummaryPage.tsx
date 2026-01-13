@@ -30,6 +30,7 @@ function periodLabel(d: UserDebtRow) {
 
 export default function DebtSummaryPage() {
   const [statusFilter, setStatusFilter] = useState<"invoiced" | "paid">("invoiced");
+  const [nameFilter, setNameFilter] = useState("");
   const [rows, setRows] = useState<SummaryRow[]>([]);
   const [error, setError] = useState("");
 
@@ -68,24 +69,31 @@ export default function DebtSummaryPage() {
 
   useEffect(() => { load(); }, [statusFilter]);
 
-  const totalAll = useMemo(() => rows.reduce((s, r) => s + r.total_cents, 0), [rows]);
+  const filteredRows = useMemo(
+    () => rows.filter((r) => r.user_name.toLowerCase().includes(nameFilter.trim().toLowerCase())),
+    [rows, nameFilter]
+  );
+  const totalAll = useMemo(
+    () => filteredRows.reduce((s, r) => s + r.total_cents, 0),
+    [filteredRows]
+  );
   const openLabel = "Periode en cours";
 
   return (
     <section style={{ display: "grid", gap: 12 }}>
-      <h2 style={{ margin: 0 }}>Resume des dettes</h2>
+      <h2 style={{ margin: 0 }}>Résumé des dettes</h2>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
         <label>
-          Statut{" "}
+          Statut : {" "}
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)}>
-            <option value="invoiced">Impayees</option>
-            <option value="paid">Payees</option>
+            <option value="invoiced">Impayées</option>
+            <option value="paid">Payées</option>
           </select>
         </label>
-        <button onClick={load}>Rafraichir</button>
+
         <span style={{ opacity: 0.7 }}>
-          Total ({statusFilter === "invoiced" ? "impaye" : "paye"}) : <b>{euros(totalAll)}</b>
+          Total ({statusFilter === "invoiced" ? "impayé" : "payé"}) : <b>{euros(totalAll)}</b>
         </span>
       </div>
 
@@ -98,12 +106,21 @@ export default function DebtSummaryPage() {
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
         <div style={{ border: "1px solid #333", borderRadius: 12, padding: 12 }}>
           <h3 style={{ marginTop: 0 }}>Par personne</h3>
-
-          {rows.length === 0 ? (
-            <p style={{ opacity: 0.7 }}>Aucune donnee.</p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+            <label>
+              Prénom : {" "}
+              <input
+                value={nameFilter}
+                onChange={(e) => setNameFilter(e.target.value)}
+                placeholder="Raphaël aka best admin"
+              />
+            </label>
+          </div>
+          {filteredRows.length === 0 ? (
+            <p style={{ opacity: 0.7 }}>Aucune donnée.</p>
           ) : (
             <div style={{ display: "grid", gap: 8 }}>
-              {rows.map((r) => (
+              {filteredRows.map((r) => (
                 <button
                   key={r.user_id}
                   onClick={() => loadUser(r.user_id)}

@@ -6,6 +6,7 @@ import { eurosFromCents } from "../lib/types";
 export default function ProductsPage() {
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [error, setError] = useState<string>("");
+  const [nameFilter, setNameFilter] = useState("");
 
   const [newName, setNewName] = useState("");
   const [newPrice, setNewPrice] = useState<number>();
@@ -106,6 +107,10 @@ export default function ProductsPage() {
     }
   }
 
+  const filteredProducts = products.filter((p) =>
+    p.name.toLowerCase().includes(nameFilter.trim().toLowerCase())
+  );
+
   return (
     <section style={{ display: "grid", gap: 12 }}>
       <h2 style={{ margin: 0 }}>Produits</h2>
@@ -148,10 +153,17 @@ export default function ProductsPage() {
       </div>
 
       <div style={{ padding: 12, border: "1px solid #333", borderRadius: 12 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-          <h3 style={{ marginTop: 0 }}>Liste</h3>
-          <button onClick={load}>Rafraichir</button>
-        </div>
+        <h3 style={{ marginTop: 0 }}>Liste</h3>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+            <label>
+              Rechercher : {" "}
+              <input
+                value={nameFilter}
+                onChange={(e) => setNameFilter(e.target.value)}
+                placeholder="Ex : Red Bull"
+              />
+            </label>
+          </div>
 
         {error && (
           <div style={{ padding: 10, border: "1px solid #a33", borderRadius: 10, marginBottom: 10 }}>
@@ -160,7 +172,7 @@ export default function ProductsPage() {
         )}
 
         <div style={{ display: "grid", gap: 8 }}>
-          {products.map((p) => (
+          {filteredProducts.map((p) => (
             <div
               key={p.id}
               style={{
@@ -205,7 +217,7 @@ export default function ProductsPage() {
             </div>
           ))}
 
-          {products.length === 0 && <p style={{ opacity: 0.7 }}>Aucun produit.</p>}
+          {filteredProducts.length === 0 && <p style={{ opacity: 0.7 }}>Aucun produit.</p>}
         </div>
       </div>
     </section>

@@ -13,6 +13,7 @@ type UserRow = {
 export default function UsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [error, setError] = useState("");
+  const [nameFilter, setNameFilter] = useState("");
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -111,6 +112,10 @@ export default function UsersPage() {
     }
   }
 
+  const filteredUsers = users.filter((u) =>
+    u.name.toLowerCase().includes(nameFilter.trim().toLowerCase())
+  );
+
   return (
     <section style={{ display: "grid", gap: 12 }}>
       <h2 style={{ margin: 0 }}>Utilisateurs</h2>
@@ -120,13 +125,12 @@ export default function UsersPage() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom" style={{ padding: 8, minWidth: 180 }} />
           <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (optionnel)" style={{ padding: 8, minWidth: 220 }} />
-          <input value={rfid} onChange={(e) => setRfid(e.target.value)} placeholder="UID badge (optionnel)" style={{ padding: 8, minWidth: 200 }} />
+          <input value={rfid} onChange={(e) => setRfid(e.target.value)} placeholder="UID badge" style={{ padding: 8, minWidth: 200 }} />
           <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
             Actif
           </label>
           <button onClick={addUser} style={{ fontWeight: 900 }}>Ajouter</button>
-          <button onClick={load}>Rafraichir</button>
         </div>
       </div>
 
@@ -139,8 +143,19 @@ export default function UsersPage() {
       <div style={{ padding: 12, border: "1px solid #333", borderRadius: 12 }}>
         <h3 style={{ marginTop: 0 }}>Liste</h3>
 
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+          <label>
+            Rechercher : {""}
+            <input
+              value={nameFilter}
+              onChange={(e) => setNameFilter(e.target.value)}
+              placeholder="Raphaël aka best admin"
+            />
+          </label>
+        </div>
+
         <div style={{ display: "grid", gap: 8 }}>
-          {users.map((u) => (
+          {filteredUsers.map((u) => (
             <div
               key={u.id}
               style={{
@@ -172,7 +187,7 @@ export default function UsersPage() {
               </div>
             </div>
           ))}
-          {users.length === 0 && <p style={{ opacity: 0.7 }}>Aucun utilisateur.</p>}
+          {filteredUsers.length === 0 && <p style={{ opacity: 0.7 }}>Aucun utilisateur.</p>}
         </div>
       </div>
 

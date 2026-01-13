@@ -15,12 +15,13 @@ export async function adminDebtRoutes(app: FastifyInstance) {
       status: z.enum(["invoiced", "paid"]).optional(),
       month_key: z.string().regex(/^\d{4}-\d{2}$/).optional(),
       user_id: z.coerce.number().int().positive().optional(),
+      user_name: z.string().min(1).optional(),
     });
 
     const parsed = querySchema.safeParse(req.query);
     if (!parsed.success) return reply.code(400).send({ error: "Invalid query" });
 
-    const { status, month_key, user_id } = parsed.data;
+    const { status, month_key, user_id, user_name } = parsed.data;
 
     const db = getDB();
     const where: string[] = [];
@@ -28,6 +29,7 @@ export async function adminDebtRoutes(app: FastifyInstance) {
 
     if (status) { where.push("pd.status = ?"); params.push(status); }
     if (user_id) { where.push("pd.user_id = ?"); params.push(user_id); }
+    if (user_name) { where.push("LOWER(u.name) LIKE ?"); params.push(`%${user_name.toLowerCase()}%`); }
 
     const whereClause = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
 
