@@ -45,9 +45,9 @@ export default function App() {
 
   function showBlockedModal(name?: string) {
     const baseMessage =
-      "Votre compte est bloque. Vous ne pouvez pas commander de boisson. Contactez le comité.";
+      "Votre compte est bloqué. Vous ne pouvez pas commander de boisson. Contactez le comité.";
     setBlockedModal({
-      title: "Acces bloque",
+      title: "Accès bloqué",
       message: name ? `${name}, ${baseMessage}` : baseMessage,
     });
     setUser(null);
