@@ -186,7 +186,7 @@ export default function App() {
             <img className="badge-logo" src={`${import.meta.env.BASE_URL}magellan-logo.png`} alt="Magellan" />
 
 
-            <h1>Badgez pour commencer</h1>
+            <h1>Badgez pour commencer123</h1>
             <p className="badge-status">{status}</p>
           </section>
         )}
