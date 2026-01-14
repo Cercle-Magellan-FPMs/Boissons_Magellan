@@ -165,7 +165,7 @@ export default function App() {
       setUser(null);
       setProducts([]);
       setCart({});
-      setStatus("Badgez ------pour commencer");
+      setStatus("Badge pour commencer");
       setScreen("badge");
     }, 3000);
   }
@@ -186,7 +186,7 @@ export default function App() {
             <img className="badge-logo" src={`${import.meta.env.BASE_URL}magellan-logo.png`} alt="Magellan" />
 
 
-            <h1>Badgez pour commencer</h1>
+            <h1>Badgez pour --------commencer</h1>
             <p className="badge-status">{status}</p>
           </section>
         )}
