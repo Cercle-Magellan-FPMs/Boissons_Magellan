@@ -350,6 +350,13 @@
   animation: float-in 280ms ease-out;
 }
 
+.thanks-logo {
+  width: min(220px, 60vw);
+  height: auto;
+  margin: 0 auto 12px;
+  display: block;
+}
+
 .thanks-icon {
   width: 60px;
   height: 60px;
@@ -458,4 +465,20 @@
 
 .blocked-modal-button:hover {
   border-color: rgba(255, 160, 160, 0.9);
+}
+
+.debt-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 12, 14, 0.78);
+  display: grid;
+  place-items: center;
+  z-index: 45;
+  padding: 16px;
+}
+
+.debt-modal {
+  width: min(1000px, 94vw);
+  max-height: 90vh;
+  overflow: auto;
 }

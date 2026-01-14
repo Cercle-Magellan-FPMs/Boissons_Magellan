@@ -17,10 +17,11 @@ function euros(cents: number) {
 }
 
 export default function App() {
-  const [screen, setScreen] = useState<"badge" | "products" | "thanks" | "debt">("badge");
+  const [screen, setScreen] = useState<"badge" | "products" | "thanks">("badge");
   const [status, setStatus] = useState("Pas de badge ? Contactez le comité.");
   const [user, setUser] = useState<User | null>(null);
   const [blockedModal, setBlockedModal] = useState<{ title: string; message: string } | null>(null);
+  const [debtModalOpen, setDebtModalOpen] = useState(false);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<Cart>({});
@@ -44,16 +45,17 @@ export default function App() {
 
   function showBlockedModal(name?: string) {
     const baseMessage =
-      "Votre compte est bloqué. Vous ne pouvez pas commander de boisson. Contactez le comité.";
+      "Votre compte est bloque. Vous ne pouvez pas commander de boisson. Contactez le comité.";
     setBlockedModal({
-      title: "Accès bloqué",
+      title: "Acces bloque",
       message: name ? `${name}, ${baseMessage}` : baseMessage,
     });
     setUser(null);
     setProducts([]);
     setCart({});
+    setDebtModalOpen(false);
     setScreen("badge");
-    setStatus("Badge pour commencer");
+    setStatus("Pas de badge ? Contactez le comité.");
   }
 
   async function identify(uidRaw: string) {
@@ -186,13 +188,14 @@ export default function App() {
     }
 
     setScreen("thanks");
-    setStatus("Merci !");
+    setStatus("Commande enregistrée.");
 
     setTimeout(() => {
       setUser(null);
       setProducts([]);
       setCart({});
-      setStatus("Badge pour commencer");
+      setDebtModalOpen(false);
+      setStatus("Pas de badge ? Contactez le comité.");
       setScreen("badge");
     }, 3000);
   }
@@ -230,7 +233,7 @@ export default function App() {
                   className="ghost-button"
                   onClick={async () => {
                     await loadDebt(user.id);
-                    setScreen("debt");
+                    setDebtModalOpen(true);
                   }}
                 >
                   Ma dette
@@ -241,7 +244,8 @@ export default function App() {
                     setScreen("badge");
                     setUser(null);
                     setCart({});
-                    setStatus("Badgez pour commencer");
+                    setDebtModalOpen(false);
+                    setStatus("Pas de badge ? Contactez le comité.");
                   }}
                 >
                   Déconnexion
@@ -334,56 +338,61 @@ export default function App() {
           </section>
         )}
 
-        {screen === "debt" && user && (
-          <section className="debt-card">
-            <header className="debt-header">
-              <div>
-                <p className="kiosk-greeting">Votre dette</p>
-                <h2>{user.name}</h2>
-              </div>
-              <button className="ghost-button" onClick={() => setScreen("products")}>
-                Retour
-              </button>
-            </header>
+        {debtModalOpen && user && (
+          <div className="debt-modal-backdrop" role="dialog" aria-modal="true">
+            <section className="debt-card debt-modal">
+              <header className="debt-header">
+                <div>
+                  <p className="kiosk-greeting">Votre dette</p>
+                  <h2>{user.name}</h2>
+                </div>
+                <button className="ghost-button" onClick={() => setDebtModalOpen(false)}>
+                  Fermer
+                </button>
+              </header>
 
-            {debtError && <p className="debt-error">{debtError}</p>}
+              {debtError && <p className="debt-error">{debtError}</p>}
 
-            {!debt ? (
-              <p className="empty-state">Chargement...</p>
-            ) : (
-              <div className="debt-grid">
-                <div className="debt-total">
-                  <span>Dette totale</span>
-                  <strong>{euros(debt.total_cents)}</strong>
-                  <div className="debt-split">
-                    <span>Dette impayée: {euros(debt.unpaid_closed_cents)}</span>
-                    <span>Dette en cours: {euros(debt.open_cents)}</span>
+              {!debt ? (
+                <p className="empty-state">Chargement...</p>
+              ) : (
+                <div className="debt-grid">
+                  <div className="debt-total">
+                    <span>Dette totale</span>
+                    <strong>{euros(debt.total_cents)}</strong>
+                    <div className="debt-split">
+                      <span>Dette impayee: {euros(debt.unpaid_closed_cents)}</span>
+                      <span>Dette en cours: {euros(debt.open_cents)}</span>
+                    </div>
+                  </div>
+
+                  <div className="debt-items">
+                    <h3>Consommations</h3>
+                    {debt.items.length === 0 ? (
+                      <p className="empty-state">Aucune consommation en cours.</p>
+                    ) : (
+                      <ul>
+                        {debt.items.map((item) => (
+                          <li key={item.product_id}>
+                            <span>{item.product_name}</span>
+                            <strong>{item.qty}</strong>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 </div>
-
-                <div className="debt-items">
-                  <h3>Consommations</h3>
-                  {debt.items.length === 0 ? (
-                    <p className="empty-state">Aucune consommation en cours.</p>
-                  ) : (
-                    <ul>
-                      {debt.items.map((item) => (
-                        <li key={item.product_id}>
-                          <span>{item.product_name}</span>
-                          <strong>{item.qty}</strong>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </div>
-            )}
-          </section>
+              )}
+            </section>
+          </div>
         )}
-
         {screen === "thanks" && (
           <section className="thanks-card">
-            <div className="thanks-icon">OK</div>
+            <img
+              className="thanks-logo"
+              src={`${import.meta.env.BASE_URL}magellan-logo.png`}
+              alt="Magellan"
+            />
             <h1>Merci !</h1>
             <p>{status}</p>
           </section>
