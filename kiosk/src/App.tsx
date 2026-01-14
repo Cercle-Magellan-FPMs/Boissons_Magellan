@@ -183,6 +183,7 @@ export default function App() {
 
         {screen === "badge" && (
           <section className="badge-card">
+            <img className="badge-logo" src={`${import.meta.env.BASE_URL}magellan-logo.png`} alt="Magellan" />
 
 
             <h1>Badgez pour --------commencer</h1>
