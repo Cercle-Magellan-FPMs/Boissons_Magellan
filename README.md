@@ -8,7 +8,7 @@ The repository is split into 3 main applications:
 - `kiosk`: React/Vite frontend used on the physical kiosk
 - `admin`: React/Vite frontend for committee/admin operations
 
-An Nginx reverse proxy and a backup container are also included for deployment.
+An Ubuntu host deployment path based on `systemd` and host `nginx` is included for production use.
 
 ## What The Project Does
 
@@ -38,15 +38,15 @@ Business concepts implemented in the codebase:
 
 ## High-Level Architecture
 
-The default deployed architecture is:
+The default deployed architecture is host-native:
 
-- `proxy` (`nginx:alpine`): entrypoint on port `80`
-- `backend`: Fastify API on port `3000`
-- `kiosk`: static frontend served behind `/kiosk/`
-- `admin`: static frontend served behind `/admin/`
-- `backup`: periodic SQLite backup container
+- `nginx` on the VM: entrypoint on port `80`
+- `boissons-backend.service`: Fastify API on port `3000`
+- static kiosk frontend published under `/var/www/boissons/kiosk`
+- static admin frontend published under `/var/www/boissons/admin`
+- `boissons-backup.timer`: periodic SQLite backup timer
 
-The SQLite database is mounted from `/var/lib/boissons` in Docker Compose.
+The SQLite database lives at `/var/lib/boissons/app.db`.
 
 ## Host VM Deployment
 
@@ -54,7 +54,7 @@ For a Docker-free deployment directly on the VM, use:
 
 - `ops/vm/deploy-host.sh`
 
-This script is intended to provision and deploy the application stack directly on Ubuntu:
+This script provisions and deploys the application stack directly on Ubuntu:
 
 - installs required host packages, including `nginx`
 - ensures Node.js 20 is available
@@ -63,8 +63,6 @@ This script is intended to provision and deploy the application stack directly o
 - installs `boissons-backend.service` in `systemd`
 - installs a host nginx site that serves `/kiosk/`, `/admin/`, `/api/kiosk/`, and `/api/admin/`
 - optionally installs a daily backup timer
-- optionally stops the existing Docker Compose stack
-
 Default runtime paths used by the script:
 
 - database: `/var/lib/boissons/app.db`
@@ -73,7 +71,7 @@ Default runtime paths used by the script:
 
 ## Public URLs And Reverse Proxy Routes
 
-Defined in `ops/nginx/nginx.conf`:
+Installed by `ops/vm/deploy-host.sh` into the host nginx configuration:
 
 - `/` -> redirects to `/kiosk/`
 - `/kiosk/` -> kiosk frontend
@@ -81,7 +79,7 @@ Defined in `ops/nginx/nginx.conf`:
 - `/api/kiosk/` -> kiosk API, IP-restricted
 - `/api/admin/` -> admin API, IP-restricted
 
-Current access restrictions in Nginx:
+Current access restrictions in nginx:
 
 - `/admin/` is only allowed from `172.16.0.111`
 - `/api/admin/` is only allowed from `172.16.0.111`
@@ -292,7 +290,6 @@ Legacy / secondary tables still present:
 │   │   ├── pages/
 │   │   ├── App.tsx
 │   │   └── main.tsx
-│   ├── Dockerfile
 │   ├── package.json
 │   └── vite.config.ts
 ├── backend/
@@ -307,7 +304,6 @@ Legacy / secondary tables still present:
 │   │   ├── routes/
 │   │   │   └── admin/
 │   │   └── index.ts
-│   ├── Dockerfile
 │   ├── package.json
 │   └── tsconfig.json
 ├── kiosk/
@@ -316,17 +312,13 @@ Legacy / secondary tables still present:
 │   ├── src/
 │   │   ├── App.tsx
 │   │   └── main.tsx
-│   ├── Dockerfile
 │   ├── package.json
 │   └── vite.config.ts
 ├── ops/
 │   ├── backup/
-│   │   ├── Dockerfile
-│   │   ├── boissons-backup.sh
-│   │   └── run.sh
-│   └── nginx/
-│       └── nginx.conf
-├── docker-compose.yml
+│   │   └── boissons-backup.sh
+│   └── vm/
+│       └── deploy-host.sh
 └── README.md
 ```
 
@@ -369,19 +361,11 @@ From `kiosk/` or `admin/`:
 - `npm install`
 - `npm run dev`
 
-### Docker deployment
+### Host deployment
 
-Root file:
+From the repository root:
 
-- `docker-compose.yml`
-
-Services:
-
-- `proxy`
-- `backend`
-- `kiosk`
-- `admin`
-- `backup`
+- `sudo ops/vm/deploy-host.sh`
 
 ## Notes
 
@@ -390,6 +374,6 @@ Services:
 - There are two debt models in the database: older `monthly_debts` logic and current `billing_periods` / `period_debts` logic. The current admin UI uses the billing period flow.
 - Kiosk orders are now prepaid from `users.balance_cents`; only unpaid orders are included in period/month debt closing.
 - User and product removal are implemented as soft deletes to preserve historical data.
-- If you change Nginx configuration, validate and reload it:
+- If you change host nginx configuration, validate and reload it:
   - `sudo nginx -t`
   - `sudo systemctl reload nginx`

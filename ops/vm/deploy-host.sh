@@ -16,7 +16,6 @@ NGINX_SITE_PATH="${NGINX_SITE_PATH:-/etc/nginx/sites-available/boissons-magellan
 ADMIN_ALLOW_IPS="${ADMIN_ALLOW_IPS:-172.16.0.111}"
 KIOSK_API_ALLOW_IPS="${KIOSK_API_ALLOW_IPS:-172.20.0.4 172.16.0.111 172.19.0.9}"
 INSTALL_NODE20="${INSTALL_NODE20:-1}"
-STOP_DOCKER_STACK="${STOP_DOCKER_STACK:-1}"
 INSTALL_BACKUP_TIMER="${INSTALL_BACKUP_TIMER:-1}"
 
 log() {
@@ -224,25 +223,6 @@ EOF
   sudo -n systemctl enable --now boissons-backup.timer
 }
 
-stop_docker_stack_if_requested() {
-  if [ "$STOP_DOCKER_STACK" != "1" ]; then
-    return
-  fi
-
-  if ! command -v docker >/dev/null 2>&1; then
-    return
-  fi
-
-  if ! sudo -n docker info >/dev/null 2>&1; then
-    return
-  fi
-
-  if [ -f "$ROOT_DIR/docker-compose.yml" ]; then
-    log "Stopping Docker stack"
-    sudo -n docker compose -f "$ROOT_DIR/docker-compose.yml" down || true
-  fi
-}
-
 disable_legacy_backend_service() {
   if sudo -n systemctl list-unit-files | grep -q '^boissons-backend-local\.service'; then
     log "Disabling legacy backend host service"
@@ -261,7 +241,6 @@ Environment overrides:
   ADMIN_ALLOW_IPS="172.16.0.111"
   KIOSK_API_ALLOW_IPS="172.20.0.4 172.16.0.111 172.19.0.9"
   INSTALL_NODE20=1
-  STOP_DOCKER_STACK=1
   INSTALL_BACKUP_TIMER=1
 
 This script:
@@ -272,7 +251,6 @@ This script:
   5. Installs a systemd backend service
   6. Installs a host nginx config
   7. Optionally installs the backup timer
-  8. Optionally stops the Docker stack
 EOF
 }
 
@@ -336,9 +314,6 @@ fi
 
 log "Installing host nginx config"
 install_host_nginx_config
-
-log "Stopping Docker stack"
-stop_docker_stack_if_requested
 
 log "Deployment complete"
 echo
