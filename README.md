@@ -1,6 +1,6 @@
 # Boissons Magellan
 
-Boissons Magellan is a small drink-selling system for the Cercle Magellan. It is designed around an RFID kiosk where a user scans a badge, selects drinks, and the purchase is added to their debt. A separate admin interface is used to manage products, stock, users, and debt-closing operations.
+Boissons Magellan is a small drink-selling system for the Cercle Magellan. It is designed around an RFID kiosk where a user scans a badge, selects drinks, and the purchase is paid immediately from their prepaid balance. A separate admin interface is used to manage products, stock, users, balances, and debt-closing operations for legacy unpaid periods.
 
 The repository is split into 3 main applications:
 
@@ -18,16 +18,18 @@ Main workflow:
 2. The kiosk calls the backend to identify the user.
 3. The kiosk displays available drinks and current stock.
 4. The user places an order.
-5. The backend stores the order, decrements stock, and records stock movements.
-6. Admins can review current debts, close billing periods, mark debts as paid, restock products, and manage users/products.
+5. The backend stores the order, debits the user's prepaid balance, decrements stock, and records stock/account movements.
+6. Admins can review debts, close billing periods, mark debts as paid, restock products, top up balances, and manage users/products.
 
 Business concepts implemented in the codebase:
 
 - Users have an RFID badge and can be active or disabled.
 - Users can have multiple RFID badge IDs mapped to the same account.
-- Users now have a prepaid balance (`balance_cents`) that is debited at kiosk checkout.
+- Users have a prepaid balance (`balance_cents`) that is debited at kiosk checkout.
 - Products have current stock and a price history.
 - Orders are recorded immediately when placed on the kiosk.
+- Kiosk checkout is prepaid-only: orders are rejected if the balance would go below `0`.
+- Kiosk checkout still authorizes a purchase even when current stock is `0` or negative.
 - Prepaid kiosk orders are marked as paid from balance and excluded from debt closing.
 - Debt can be viewed in two ways:
   - live/current debt from open orders
@@ -89,6 +91,7 @@ Registered route groups:
 
 - `POST /api/kiosk/identify`
   - Identifies a user from an RFID UID
+  - Normalizes scanned values before lookup and matches both `users.rfid_uid` and `user_badges.uid`
   - Request body: `{ uid: string }`
 
 - `GET /api/kiosk/debt/:userId`
@@ -102,10 +105,11 @@ Registered route groups:
 - `GET /api/kiosk/products`
   - Lists active products visible on the kiosk
   - Includes current price, current stock, availability, and image slug
+  - Products remain orderable even when stock is `0`; only products without a current price are blocked
 
 - `POST /api/kiosk/order`
   - Creates an order for a user
-  - Validates user status, stock, product price, and available prepaid balance
+  - Validates user status, product price, and available prepaid balance
   - Rejects the order if the user balance would go below `0`
   - Decrements stock, debits the user balance, and writes stock/account movement rows
 
@@ -121,6 +125,8 @@ Products:
 - `POST /api/admin/products/:id/price`
 - `DELETE /api/admin/products/:id`
   - Soft-deletes a product from the admin/kiosk lists while preserving history
+- `POST /api/admin/products/:id/delete`
+  - Alias used by the admin UI for product soft-delete in environments where `DELETE` is inconvenient
 
 Stock / restock:
 
@@ -153,6 +159,8 @@ Users:
 - `POST /api/admin/users/:id/topup`
 - `DELETE /api/admin/users/:id`
   - Soft-deletes a user from the admin list while preserving history
+- `POST /api/admin/users/:id/delete`
+  - Alias used by the admin UI for user soft-delete in environments where `DELETE` is inconvenient
 
 ## Frontend Structure
 
@@ -163,7 +171,7 @@ Location: `kiosk/`
 Purpose:
 
 - Wait for a badge scan
-- Identify the user
+- Identify the user from direct badge scans, including newly added badges
 - Display available drinks
 - Build a cart
 - Submit orders
@@ -171,7 +179,7 @@ Purpose:
 
 Main files:
 
-- `kiosk/src/App.tsx`: main kiosk flow and API calls
+- `kiosk/src/App.tsx`: main kiosk flow, badge-scan capture, and API calls
 - `kiosk/src/main.tsx`: React bootstrap
 - `kiosk/src/App.css`: kiosk UI styles
 - `kiosk/public/magellan-logo.png`: kiosk branding asset

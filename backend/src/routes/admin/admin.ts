@@ -6,6 +6,25 @@ import { loadProductSlugs, normalizeSlug, setProductSlug } from "../../lib/produ
 import { requireAdmin } from "./_auth.js";
 
 export async function adminRoutes(app: FastifyInstance) {
+  async function softDeleteProduct(id: number) {
+    const db = getDB();
+
+    const existing = db.prepare(`
+      SELECT id FROM products WHERE id=? AND deleted_at IS NULL
+    `).get(id);
+    if (!existing) return { error: "Product not found", status: 404 as const };
+
+    db.prepare(`
+      UPDATE products
+      SET is_active = 0,
+          deleted_at = datetime('now')
+      WHERE id = ?
+    `).run(id);
+    setProductSlug(id, null);
+
+    return { ok: true as const };
+  }
+
   // --- PRODUCTS ---
 
   // List products + stock + current price
@@ -249,29 +268,18 @@ export async function adminRoutes(app: FastifyInstance) {
     }
   });
 
-  app.delete("/api/admin/products/:id", async (req, reply) => {
+  async function handleDeleteProduct(req: any, reply: any) {
     try { requireAdmin(req); } catch (e: any) { return reply.code(e.statusCode ?? 500).send({ error: e.message }); }
 
     const paramsSchema = z.object({ id: z.coerce.number().int().positive() });
     const p = paramsSchema.safeParse(req.params);
     if (!p.success) return reply.code(400).send({ error: "Invalid product id" });
 
-    const { id } = p.data;
-    const db = getDB();
+    const result = await softDeleteProduct(p.data.id);
+    if ("error" in result) return reply.code(result.status).send({ error: result.error });
+    return reply.send(result);
+  }
 
-    const existing = db.prepare(`
-      SELECT id FROM products WHERE id=? AND deleted_at IS NULL
-    `).get(id);
-    if (!existing) return reply.code(404).send({ error: "Product not found" });
-
-    db.prepare(`
-      UPDATE products
-      SET is_active = 0,
-          deleted_at = datetime('now')
-      WHERE id = ?
-    `).run(id);
-    setProductSlug(id, null);
-
-    return reply.send({ ok: true });
-  });
+  app.delete("/api/admin/products/:id", handleDeleteProduct);
+  app.post("/api/admin/products/:id/delete", handleDeleteProduct);
 }

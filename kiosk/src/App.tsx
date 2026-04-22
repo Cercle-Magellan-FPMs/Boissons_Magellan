@@ -31,7 +31,7 @@ export default function App() {
   const [imageErrors, setImageErrors] = useState<Record<string, true>>({});
 
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const bufferRef = useRef("");
+  const scanTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     const focus = () => inputRef.current?.focus();
@@ -60,7 +60,11 @@ export default function App() {
   }
 
   async function identify(uidRaw: string) {
-    const uid = uidRaw.trim().toUpperCase();
+    const uid = uidRaw.replace(/\s+/g, "").trim().toUpperCase();
+    if (!uid) {
+      setStatus("Badge vide ou invalide.");
+      return;
+    }
     setStatus(`Identification de ${uid}...`);
 
     const res = await fetch("/api/kiosk/identify", {
@@ -114,30 +118,36 @@ export default function App() {
   }
 
   function onBadgeKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    e.preventDefault();
-
     if (e.key === "Enter") {
-      const uid = bufferRef.current;
-      bufferRef.current = "";
+      e.preventDefault();
+      const uid = e.currentTarget.value;
+      e.currentTarget.value = "";
+      if (scanTimeoutRef.current) {
+        window.clearTimeout(scanTimeoutRef.current);
+        scanTimeoutRef.current = null;
+      }
       if (uid) identify(uid);
       return;
     }
-
-    if (e.key.length === 1) {
-      bufferRef.current += e.key;
-    }
   }
 
-  function remainingQty(productId: number) {
-    const product = products.find((p) => p.id === productId);
-    if (!product) return 0;
-    const inCart = cart[productId] || 0;
-    return Math.max(0, product.qty - inCart);
+  function onBadgeInput(e: React.FormEvent<HTMLInputElement>) {
+    const input = e.currentTarget;
+    if (scanTimeoutRef.current) {
+      window.clearTimeout(scanTimeoutRef.current);
+    }
+    scanTimeoutRef.current = window.setTimeout(() => {
+      const uid = input.value;
+      input.value = "";
+      scanTimeoutRef.current = null;
+      if (uid) identify(uid);
+    }, 120);
   }
 
   function addToCart(productId: number) {
-    if (remainingQty(productId) <= 0) {
-      setStatus("Stock insuffisant.");
+    const product = products.find((p) => p.id === productId);
+    if (!product || product.price_cents == null) {
+      setStatus("Produit indisponible.");
       return;
     }
     setCart((c) => ({ ...c, [productId]: (c[productId] || 0) + 1 }));
@@ -213,6 +223,7 @@ export default function App() {
           inputMode="none"
           className="badge-input"
           onKeyDown={screen === "badge" ? onBadgeKeyDown : undefined}
+          onInput={screen === "badge" ? onBadgeInput : undefined}
         />
 
         {screen === "badge" && (
@@ -266,8 +277,7 @@ export default function App() {
                 </div>
                 <div className="products-grid">
                 {products.map(p => {
-                  const remaining = Math.max(0, p.qty - (cart[p.id] || 0));
-                  const canAdd = remaining > 0 && p.price_cents != null;
+                  const canAdd = p.price_cents != null;
                   const slug = p.image_slug || "";
                   const showImage = slug && !imageErrors[slug];
                   return (
@@ -291,7 +301,9 @@ export default function App() {
                       )}
                       <div className="tile-info">
                         <div className="tile-title">{p.name}</div>
-                        <div className="tile-status">{canAdd ? "Dispo" : "Indispo"}</div>
+                        <div className="tile-status">
+                          {canAdd ? `Stock actuel: ${p.qty}` : "Prix manquant"}
+                        </div>
                       </div>
                       <div className="tile-price">
                         {p.price_cents == null ? "Prix manquant" : euros(p.price_cents)}

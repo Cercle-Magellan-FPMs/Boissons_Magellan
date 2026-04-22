@@ -37,19 +37,17 @@ export async function orderRoutes(app: FastifyInstance) {
       if (!user) throw new Error("USER_NOT_FOUND");
       if (user.is_active !== 1) throw new Error("USER_DISABLED");
 
-      // Vérif stock + prix + calc total
+      // Validate product existence and price. Stock can go negative on checkout.
       let total = 0;
       const resolved = items.map((it) => {
-        const stock = db.prepare(
-          `SELECT sc.qty
-           FROM stock_current sc
-           JOIN products p ON p.id = sc.product_id
-           WHERE sc.product_id = ?
-             AND p.deleted_at IS NULL`
+        const product = db.prepare(
+          `SELECT id
+           FROM products
+           WHERE id = ?
+             AND deleted_at IS NULL
+             AND is_active = 1`
         ).get(it.product_id) as any;
-
-        const qtyAvailable = stock ? Number(stock.qty) : 0;
-        if (qtyAvailable < it.qty) throw new Error("OUT_OF_STOCK");
+        if (!product) throw new Error("PRODUCT_NOT_FOUND");
 
         const priceRow = db.prepare(
           `SELECT pp.price_cents
@@ -92,6 +90,9 @@ export async function orderRoutes(app: FastifyInstance) {
          VALUES (?, ?, ?, 'sale', ?, ?)`
       );
 
+      const ensureStockRow = db.prepare(
+        `INSERT OR IGNORE INTO stock_current (product_id, qty) VALUES (?, 0)`
+      );
       const updateStock = db.prepare(
         `UPDATE stock_current SET qty = qty - ? WHERE product_id = ?`
       );
@@ -110,6 +111,7 @@ export async function orderRoutes(app: FastifyInstance) {
       for (const r of resolved) {
         insertItem.run(orderId, r.product_id, r.qty, r.unit_price_cents);
         insertMove.run(moveId, r.product_id, -r.qty, orderId, "vente kiosk");
+        ensureStockRow.run(r.product_id);
         updateStock.run(r.qty, r.product_id);
       }
 
@@ -127,7 +129,7 @@ export async function orderRoutes(app: FastifyInstance) {
       const msg = String(e?.message || e);
       if (msg.includes("USER_DISABLED")) return reply.code(403).send({ error: "User disabled" });
       if (msg.includes("USER_NOT_FOUND")) return reply.code(404).send({ error: "User not found" });
-      if (msg.includes("OUT_OF_STOCK")) return reply.code(409).send({ error: "Out of stock" });
+      if (msg.includes("PRODUCT_NOT_FOUND")) return reply.code(404).send({ error: "Product not found" });
       if (msg.includes("INSUFFICIENT_BALANCE")) return reply.code(409).send({ error: "Insufficient balance" });
       if (msg.includes("PRICE_MISSING")) return reply.code(500).send({ error: "Price missing" });
       return reply.code(500).send({ error: "Internal error" });

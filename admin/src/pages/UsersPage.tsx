@@ -16,6 +16,9 @@ export default function UsersPage() {
   const [badgeModalUser, setBadgeModalUser] = useState<AdminUser | null>(null);
   const [badgeInput, setBadgeInput] = useState("");
   const badgeInputRef = useRef<HTMLInputElement | null>(null);
+  const [topUpModalUser, setTopUpModalUser] = useState<AdminUser | null>(null);
+  const [topUpAmount, setTopUpAmount] = useState("10");
+  const [topUpComment, setTopUpComment] = useState("");
 
   async function load() {
     setError("");
@@ -40,6 +43,12 @@ export default function UsersPage() {
     const freshUser = users.find((user) => user.id === badgeModalUser.id) || null;
     setBadgeModalUser(freshUser);
   }, [users, badgeModalUser]);
+
+  useEffect(() => {
+    if (!topUpModalUser) return;
+    const freshUser = users.find((user) => user.id === topUpModalUser.id) || null;
+    setTopUpModalUser(freshUser);
+  }, [users, topUpModalUser]);
 
   async function addUser() {
     if (!name.trim()) return;
@@ -123,29 +132,32 @@ export default function UsersPage() {
     }
   }
 
-  async function topUp(user: AdminUser) {
-    const amount = prompt(
-      "Montant en EUR. Utilisez une valeur negative pour un ajustement manuel.",
-      "10"
-    );
-    if (amount == null) return;
+  function openTopUpModal(user: AdminUser) {
+    setTopUpModalUser(user);
+    setTopUpAmount("10");
+    setTopUpComment("");
+  }
 
-    const value = Math.round(Number(amount.replace(",", ".")) * 100);
+  async function submitTopUp() {
+    if (!topUpModalUser) return;
+
+    const value = Math.round(Number(topUpAmount.replace(",", ".")) * 100);
     if (!Number.isFinite(value) || value === 0) {
       alert("Montant invalide");
       return;
     }
 
-    const comment = prompt("Commentaire (optionnel)", "") ?? "";
-
     try {
-      await api(`/api/admin/users/${user.id}/topup`, {
+      await api(`/api/admin/users/${topUpModalUser.id}/topup`, {
         method: "POST",
         body: JSON.stringify({
           amount_cents: value,
-          comment: comment.trim() || undefined,
+          comment: topUpComment.trim() || undefined,
         }),
       });
+      setTopUpModalUser(null);
+      setTopUpAmount("10");
+      setTopUpComment("");
       await load();
     } catch (e: any) {
       alert(e.message);
@@ -155,8 +167,8 @@ export default function UsersPage() {
   async function removeUser(user: AdminUser) {
     if (!confirm(`Supprimer ${user.name} de la liste des utilisateurs ?`)) return;
     try {
-      await api(`/api/admin/users/${user.id}`, {
-        method: "DELETE",
+      await api(`/api/admin/users/${user.id}/delete`, {
+        method: "POST",
       });
       if (badgeModalUser?.id === user.id) {
         setBadgeModalUser(null);
@@ -246,7 +258,7 @@ export default function UsersPage() {
                 <button onClick={() => openBadgeModal(u)}>
                   {u.badge_uids.length > 0 ? "Gerer badges" : "Lier badge"}
                 </button>
-                <button onClick={() => topUp(u)}>Recharger</button>
+                <button onClick={() => openTopUpModal(u)}>Recharger</button>
                 <button onClick={() => toggleActive(u)}>{u.is_active === 1 ? "Desactiver" : "Activer"}</button>
                 <button onClick={() => removeUser(u)}>Supprimer</button>
               </div>
@@ -331,6 +343,78 @@ export default function UsersPage() {
 
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button onClick={() => setBadgeModalUser(null)}>Fermer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {topUpModalUser && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(7, 10, 12, 0.7)",
+            display: "grid",
+            placeItems: "center",
+            padding: 16,
+            zIndex: 1000,
+          }}
+          onClick={() => setTopUpModalUser(null)}
+        >
+          <div
+            style={{
+              width: "min(520px, 92vw)",
+              background: "var(--panel)",
+              border: "1px solid var(--border)",
+              borderRadius: 16,
+              padding: 20,
+              boxShadow: "var(--shadow)",
+              display: "grid",
+              gap: 12,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <div style={{ fontWeight: 700, fontSize: "1.1rem" }}>Recharger un utilisateur</div>
+              <div style={{ opacity: 0.7 }}>{topUpModalUser.name}</div>
+              <div style={{ opacity: 0.7 }}>
+                Solde actuel: {eurosFromCents(topUpModalUser.balance_cents)}
+              </div>
+            </div>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span>Montant en EUR</span>
+              <input
+                value={topUpAmount}
+                onChange={(e) => setTopUpAmount(e.target.value)}
+                placeholder="10"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") submitTopUp();
+                }}
+              />
+            </label>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span>Commentaire</span>
+              <input
+                value={topUpComment}
+                onChange={(e) => setTopUpComment(e.target.value)}
+                placeholder="Optionnel"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") submitTopUp();
+                }}
+              />
+            </label>
+
+            <div style={{ opacity: 0.75, fontSize: "0.95rem" }}>
+              Utilisez une valeur negative uniquement pour une correction manuelle.
+            </div>
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => setTopUpModalUser(null)}>Annuler</button>
+              <button onClick={submitTopUp} style={{ fontWeight: 700 }}>
+                Valider
+              </button>
             </div>
           </div>
         </div>

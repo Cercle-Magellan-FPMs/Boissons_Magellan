@@ -7,7 +7,7 @@ export async function kioskRoutes(app: FastifyInstance) {
     const bodySchema = z.object({
       uid: z.string().min(1),
     });
-
+    req.log.info({ body: req.body }, "identify payload");
     const parsed = bodySchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Invalid payload" });
@@ -19,13 +19,14 @@ export async function kioskRoutes(app: FastifyInstance) {
     type DbUser = {
       id: number;
       name: string;
+      email: string | null;
       rfid_uid: string | null;
       is_active: number; // 0/1 en SQLite
       balance_cents: number;
     };
     const user = db
       .prepare(
-        `SELECT DISTINCT
+        `SELECT
            u.id,
            u.name,
            u.email,
@@ -33,9 +34,17 @@ export async function kioskRoutes(app: FastifyInstance) {
            u.is_active,
            u.balance_cents
          FROM users u
-         LEFT JOIN user_badges ub ON ub.user_id = u.id
          WHERE u.deleted_at IS NULL
-           AND (ub.uid = ? OR u.rfid_uid = ?)`
+           AND (
+             u.rfid_uid = ?
+             OR EXISTS (
+               SELECT 1
+               FROM user_badges ub
+               WHERE ub.user_id = u.id
+                 AND ub.uid = ?
+             )
+           )
+         LIMIT 1`
       )
       .get(uid, uid) as DbUser | undefined;
 

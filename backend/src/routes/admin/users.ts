@@ -9,6 +9,29 @@ function normUid(uid: string) {
 }
 
 export async function adminUserRoutes(app: FastifyInstance) {
+  async function softDeleteUser(id: number) {
+    const db = getDB();
+
+    const existing = db.prepare(`
+      SELECT id FROM users WHERE id=? AND deleted_at IS NULL
+    `).get(id);
+    if (!existing) return { error: "User not found", status: 404 as const };
+
+    const tx = db.transaction(() => {
+      db.prepare(`DELETE FROM user_badges WHERE user_id = ?`).run(id);
+      db.prepare(`
+        UPDATE users
+        SET is_active = 0,
+            rfid_uid = NULL,
+            deleted_at = datetime('now')
+        WHERE id = ?
+      `).run(id);
+    });
+
+    tx();
+    return { ok: true as const };
+  }
+
   // LIST USERS
   app.get("/api/admin/users", async (req, reply) => {
     try { requireAdmin(req); } catch (e: any) {
@@ -26,9 +49,13 @@ export async function adminUserRoutes(app: FastifyInstance) {
         u.created_at,
         u.balance_cents,
         COALESCE((
-          SELECT GROUP_CONCAT(ub.uid, char(10))
-          FROM user_badges ub
-          WHERE ub.user_id = u.id
+          SELECT GROUP_CONCAT(uid, char(10))
+          FROM (
+            SELECT DISTINCT ub.uid AS uid
+            FROM user_badges ub
+            WHERE ub.user_id = u.id
+            ORDER BY ub.created_at ASC, ub.id ASC
+          )
         ), '') AS badge_uids
       FROM users u
       WHERE u.deleted_at IS NULL
@@ -171,7 +198,15 @@ export async function adminUserRoutes(app: FastifyInstance) {
       });
 
       tx();
-      return reply.send({ ok: true });
+
+      const badges = db.prepare(`
+        SELECT uid
+        FROM user_badges
+        WHERE user_id = ?
+        ORDER BY created_at ASC, id ASC
+      `).all(id) as Array<{ uid: string }>;
+
+      return reply.send({ ok: true, badge_uids: badges.map((badge) => badge.uid) });
     } catch (e: any) {
       const msg = String(e?.message || e);
       if (msg.includes("UNIQUE") && (msg.includes("rfid_uid") || msg.includes("user_badges.uid"))) {
@@ -284,8 +319,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
     }
   });
 
-  // SOFT DELETE USER
-  app.delete("/api/admin/users/:id", async (req, reply) => {
+  async function handleDeleteUser(req: any, reply: any) {
     try { requireAdmin(req); } catch (e: any) {
       return reply.code(e.statusCode ?? 500).send({ error: e.message });
     }
@@ -294,26 +328,12 @@ export async function adminUserRoutes(app: FastifyInstance) {
     const p = paramsSchema.safeParse(req.params);
     if (!p.success) return reply.code(400).send({ error: "Invalid user id" });
 
-    const { id } = p.data;
-    const db = getDB();
+    const result = await softDeleteUser(p.data.id);
+    if ("error" in result) return reply.code(result.status).send({ error: result.error });
+    return reply.send(result);
+  }
 
-    const existing = db.prepare(`
-      SELECT id FROM users WHERE id=? AND deleted_at IS NULL
-    `).get(id);
-    if (!existing) return reply.code(404).send({ error: "User not found" });
-
-    const tx = db.transaction(() => {
-      db.prepare(`DELETE FROM user_badges WHERE user_id = ?`).run(id);
-      db.prepare(`
-        UPDATE users
-        SET is_active = 0,
-            rfid_uid = NULL,
-            deleted_at = datetime('now')
-        WHERE id = ?
-      `).run(id);
-    });
-
-    tx();
-    return reply.send({ ok: true });
-  });
+  // SOFT DELETE USER
+  app.delete("/api/admin/users/:id", handleDeleteUser);
+  app.post("/api/admin/users/:id/delete", handleDeleteUser);
 }

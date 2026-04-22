@@ -27,14 +27,14 @@ export async function productRoutes(app: FastifyInstance) {
       ORDER BY p.name ASC
     `).all() as Array<any>;
 
-    // Kiosk: seulement dispo/pas dispo (mais on renvoie quand même le prix pour l'affichage)
+    // Kiosk keeps products orderable even when stock is depleted.
     const slugs = loadProductSlugs();
     const products = rows.map(r => ({
       id: r.id,
       name: r.name,
       price_cents: r.price_cents ?? null,
       qty: Number(r.qty) || 0,
-      available: Number(r.qty) > 0,
+      available: r.price_cents != null,
       image_slug: slugs[String(r.id)] ?? null,
     }));
 

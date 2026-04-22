@@ -87,8 +87,8 @@ export default function ProductsPage() {
   async function removeProduct(p: AdminProduct) {
     if (!confirm(`Supprimer "${p.name}" de la liste ?`)) return;
     try {
-      await api(`/api/admin/products/${p.id}`, {
-        method: "DELETE",
+      await api(`/api/admin/products/${p.id}/delete`, {
+        method: "POST",
       });
       await load();
     } catch (e: any) {
