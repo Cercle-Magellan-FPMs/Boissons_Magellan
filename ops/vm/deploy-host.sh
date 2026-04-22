@@ -243,6 +243,13 @@ stop_docker_stack_if_requested() {
   fi
 }
 
+disable_legacy_backend_service() {
+  if sudo -n systemctl list-unit-files | grep -q '^boissons-backend-local\.service'; then
+    log "Disabling legacy backend host service"
+    sudo -n systemctl disable --now boissons-backend-local.service || true
+  fi
+}
+
 usage() {
   cat <<EOF
 Usage: $(basename "$0")
@@ -319,6 +326,7 @@ sudo -n rsync -a --delete "$ADMIN_DIR/dist/" "$WEB_ROOT/admin/"
 sudo -n rsync -a --delete "$KIOSK_DIR/dist/" "$WEB_ROOT/kiosk/"
 
 log "Installing backend service"
+disable_legacy_backend_service
 install_backend_service
 
 if [ "$INSTALL_BACKUP_TIMER" = "1" ]; then
