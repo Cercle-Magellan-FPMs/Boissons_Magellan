@@ -145,6 +145,16 @@ EOF
 }
 
 install_backend_service() {
+  local backend_entrypoint
+  if [ -f "$BACKEND_DIR/dist/index.js" ]; then
+    backend_entrypoint="$BACKEND_DIR/dist/index.js"
+  elif [ -f "$BACKEND_DIR/src/index.js" ]; then
+    backend_entrypoint="$BACKEND_DIR/src/index.js"
+  else
+    echo "Backend build output not found. Expected dist/index.js or src/index.js." >&2
+    exit 1
+  fi
+
   local service_file
   service_file="$(mktemp)"
 
@@ -162,7 +172,7 @@ Environment=NODE_ENV=production
 Environment=PORT=3000
 Environment=DB_PATH=$DB_PATH
 EnvironmentFile=-$BACKEND_DIR/.env
-ExecStart=/usr/bin/node $BACKEND_DIR/dist/index.js
+ExecStart=/usr/bin/node $backend_entrypoint
 Restart=always
 RestartSec=2
 
