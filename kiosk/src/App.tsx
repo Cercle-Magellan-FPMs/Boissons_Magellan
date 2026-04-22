@@ -13,8 +13,28 @@ type DebtSummary = {
   items: DebtItem[];
 };
 
+const badgeCharMap: Record<string, string> = {
+  "à": "0",
+  "&": "1",
+  "!": "1",
+  "é": "2",
+  "\"": "3",
+  "'": "4",
+  "(": "5",
+  "-": "6",
+  "è": "7",
+  "_": "8",
+  "ç": "9",
+};
+
 function euros(cents: number) {
   return (cents / 100).toFixed(2) + " EUR";
+}
+
+function normalizeBadgeUid(value: string) {
+  const compact = value.replace(/\s+/g, "").trim();
+  const translated = Array.from(compact).map((char) => badgeCharMap[char] ?? char).join("");
+  return translated.replace(/[^0-9A-Z]/gi, "").toUpperCase();
 }
 
 export default function App() {
@@ -60,7 +80,7 @@ export default function App() {
   }
 
   async function identify(uidRaw: string) {
-    const uid = uidRaw.replace(/\s+/g, "").trim().toUpperCase();
+    const uid = normalizeBadgeUid(uidRaw);
     if (!uid) {
       setStatus("Badge vide ou invalide.");
       return;
