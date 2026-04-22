@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { getDB } from "../db/db.js";
-import { badgeUidCandidates, normalizeBadgeUid } from "../lib/badgeUid.js";
+import { badgeMatchCandidates, normalizeBadgeUid } from "../lib/badgeUid.js";
 
 export async function kioskRoutes(app: FastifyInstance) {
   app.post("/api/kiosk/identify", async (req, reply) => {
@@ -15,7 +15,7 @@ export async function kioskRoutes(app: FastifyInstance) {
 
     const rawUid = parsed.data.uid;
     const normalizedUid = normalizeBadgeUid(rawUid);
-    const uidCandidates = badgeUidCandidates(rawUid);
+    const uidCandidates = badgeMatchCandidates(rawUid);
     req.log.info({ rawUid, normalizedUid, uidCandidates }, "badge identify");
     if (!normalizedUid) {
       return reply.code(400).send({ error: "Invalid badge UID" });
@@ -31,7 +31,7 @@ export async function kioskRoutes(app: FastifyInstance) {
       balance_cents: number;
     };
     const candidatePlaceholders = uidCandidates.map(() => "?").join(", ");
-    const user = db
+    const directUser = db
       .prepare(
         `SELECT
            u.id,
@@ -54,6 +54,55 @@ export async function kioskRoutes(app: FastifyInstance) {
          LIMIT 1`
       )
       .get(...uidCandidates, ...uidCandidates) as DbUser | undefined;
+
+    if (directUser) {
+      if (directUser.is_active !== 1) {
+        return reply.code(403).send({ error: "User disabled", user: directUser });
+      }
+      return reply.send({ user: directUser });
+    }
+
+    const rows = db.prepare(
+      `SELECT
+         u.id,
+         u.name,
+         u.email,
+         u.rfid_uid,
+         u.is_active,
+         u.balance_cents,
+         ub.uid AS badge_uid
+       FROM users u
+       LEFT JOIN user_badges ub ON ub.user_id = u.id
+       WHERE u.deleted_at IS NULL`
+    ).all() as Array<DbUser & { badge_uid: string | null }>;
+
+    const userMap = new Map<number, DbUser>();
+    for (const row of rows) {
+      const rowCandidates = new Set<string>();
+      if (row.rfid_uid) {
+        for (const candidate of badgeMatchCandidates(row.rfid_uid)) {
+          rowCandidates.add(candidate);
+        }
+      }
+      if (row.badge_uid) {
+        for (const candidate of badgeMatchCandidates(row.badge_uid)) {
+          rowCandidates.add(candidate);
+        }
+      }
+
+      if (uidCandidates.some((candidate) => rowCandidates.has(candidate))) {
+        userMap.set(row.id, {
+          id: row.id,
+          name: row.name,
+          email: row.email,
+          rfid_uid: row.rfid_uid,
+          is_active: row.is_active,
+          balance_cents: row.balance_cents,
+        });
+      }
+    }
+
+    const user = Array.from(userMap.values())[0];
 
     if (!user) {
       return reply.code(404).send({ error: "Badge not recognized" });

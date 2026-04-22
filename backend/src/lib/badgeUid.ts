@@ -35,3 +35,27 @@ export function badgeUidCandidates(value: string) {
   const normalized = normalizeBadgeUid(value);
   return Array.from(new Set([compact, normalized].filter(Boolean)));
 }
+
+function edgeTrimVariants(value: string) {
+  const compact = compactUid(value);
+  return Array.from(new Set([
+    compact,
+    compact.slice(1),
+    compact.slice(0, -1),
+    compact.slice(1, -1),
+  ].filter(Boolean)));
+}
+
+export function badgeMatchCandidates(value: string) {
+  const rawVariants = edgeTrimVariants(value);
+  const normalizedVariants = rawVariants.map((variant) => normalizeBadgeUid(variant));
+
+  return Array.from(
+    new Set(
+      [
+        ...rawVariants.map((variant) => variant.toUpperCase()),
+        ...normalizedVariants,
+      ].filter(Boolean),
+    ),
+  );
+}
