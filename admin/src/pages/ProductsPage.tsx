@@ -84,6 +84,18 @@ export default function ProductsPage() {
     }
   }
 
+  async function removeProduct(p: AdminProduct) {
+    if (!confirm(`Supprimer "${p.name}" de la liste ?`)) return;
+    try {
+      await api(`/api/admin/products/${p.id}`, {
+        method: "DELETE",
+      });
+      await load();
+    } catch (e: any) {
+      alert(e.message);
+    }
+  }
+
   async function addProduct() {
     if (!newName.trim()) return;
     try {
@@ -213,6 +225,7 @@ export default function ProductsPage() {
                 <button onClick={() => toggleActive(p)}>
                   {p.is_active === 1 ? "Desactiver" : "Activer"}
                 </button>
+                <button onClick={() => removeProduct(p)}>Supprimer</button>
               </div>
             </div>
           ))}

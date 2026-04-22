@@ -48,6 +48,7 @@ export async function adminCloseMonthRoutes(app: FastifyInstance) {
       FROM orders
       WHERE month_key = ?
         AND status = 'committed'
+        AND COALESCE(paid_from_balance, 0) = 0
       GROUP BY user_id
       HAVING SUM(total_cents) > 0
       ORDER BY user_id ASC

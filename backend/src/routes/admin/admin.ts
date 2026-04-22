@@ -28,6 +28,7 @@ export async function adminRoutes(app: FastifyInstance) {
         ) AS price_cents
       FROM products p
       LEFT JOIN stock_current sc ON sc.product_id = p.id
+      WHERE p.deleted_at IS NULL
       ORDER BY p.name ASC
     `).all();
 
@@ -62,7 +63,10 @@ export async function adminRoutes(app: FastifyInstance) {
       db.prepare(`INSERT INTO products (name, is_active) VALUES (?, ?)`)
         .run(name.trim(), is_active ? 1 : 0);
 
-      const p = db.prepare(`SELECT id FROM products WHERE name = ?`).get(name.trim()) as any;
+      const p = db.prepare(`
+        SELECT id FROM products
+        WHERE name = ? AND deleted_at IS NULL
+      `).get(name.trim()) as any;
 
       db.prepare(`INSERT OR IGNORE INTO stock_current (product_id, qty) VALUES (?, 0)`)
         .run(p.id);
@@ -124,7 +128,7 @@ export async function adminRoutes(app: FastifyInstance) {
     const { id } = p.data;
     const { name, is_active, image_slug } = b.data;
 
-    const existing = db.prepare(`SELECT id FROM products WHERE id=?`).get(id);
+    const existing = db.prepare(`SELECT id FROM products WHERE id=? AND deleted_at IS NULL`).get(id);
     if (!existing) return reply.code(404).send({ error: "Product not found" });
 
     if (name !== undefined) {
@@ -168,7 +172,7 @@ export async function adminRoutes(app: FastifyInstance) {
     const { price_cents, starts_at } = b.data;
 
     const db = getDB();
-    const exists = db.prepare(`SELECT 1 FROM products WHERE id=?`).get(id);
+    const exists = db.prepare(`SELECT 1 FROM products WHERE id=? AND deleted_at IS NULL`).get(id);
     if (!exists) return reply.code(404).send({ error: "Product not found" });
 
     if (starts_at) {
@@ -220,7 +224,9 @@ export async function adminRoutes(app: FastifyInstance) {
       `);
 
       for (const it of items) {
-        const exists = db.prepare(`SELECT 1 FROM products WHERE id=?`).get(it.product_id);
+        const exists = db.prepare(`
+          SELECT 1 FROM products WHERE id=? AND deleted_at IS NULL
+        `).get(it.product_id);
         if (!exists) throw new Error("PRODUCT_NOT_FOUND");
 
         ensureStockRow.run(it.product_id);
@@ -241,5 +247,31 @@ export async function adminRoutes(app: FastifyInstance) {
       }
       return reply.code(500).send({ error: "Internal error" });
     }
+  });
+
+  app.delete("/api/admin/products/:id", async (req, reply) => {
+    try { requireAdmin(req); } catch (e: any) { return reply.code(e.statusCode ?? 500).send({ error: e.message }); }
+
+    const paramsSchema = z.object({ id: z.coerce.number().int().positive() });
+    const p = paramsSchema.safeParse(req.params);
+    if (!p.success) return reply.code(400).send({ error: "Invalid product id" });
+
+    const { id } = p.data;
+    const db = getDB();
+
+    const existing = db.prepare(`
+      SELECT id FROM products WHERE id=? AND deleted_at IS NULL
+    `).get(id);
+    if (!existing) return reply.code(404).send({ error: "Product not found" });
+
+    db.prepare(`
+      UPDATE products
+      SET is_active = 0,
+          deleted_at = datetime('now')
+      WHERE id = ?
+    `).run(id);
+    setProductSlug(id, null);
+
+    return reply.send({ ok: true });
   });
 }

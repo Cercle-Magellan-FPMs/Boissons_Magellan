@@ -1,0 +1,1 @@
+ALTER TABLE orders ADD COLUMN paid_from_balance INTEGER NOT NULL DEFAULT 0;

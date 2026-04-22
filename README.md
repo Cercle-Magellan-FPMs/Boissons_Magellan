@@ -24,8 +24,11 @@ Main workflow:
 Business concepts implemented in the codebase:
 
 - Users have an RFID badge and can be active or disabled.
+- Users can have multiple RFID badge IDs mapped to the same account.
+- Users now have a prepaid balance (`balance_cents`) that is debited at kiosk checkout.
 - Products have current stock and a price history.
 - Orders are recorded immediately when placed on the kiosk.
+- Prepaid kiosk orders are marked as paid from balance and excluded from debt closing.
 - Debt can be viewed in two ways:
   - live/current debt from open orders
   - closed debt generated when an admin closes a billing period
@@ -91,6 +94,7 @@ Registered route groups:
 - `GET /api/kiosk/debt/:userId`
   - Returns the user debt summary
   - Includes:
+    - current prepaid balance
     - unpaid closed debts
     - open debt since the last billing period
     - aggregated purchased items
@@ -101,8 +105,9 @@ Registered route groups:
 
 - `POST /api/kiosk/order`
   - Creates an order for a user
-  - Validates user status, stock, and product price
-  - Decrements stock and writes stock movement rows
+  - Validates user status, stock, product price, and available prepaid balance
+  - Rejects the order if the user balance would go below `0`
+  - Decrements stock, debits the user balance, and writes stock/account movement rows
 
 ### Admin API
 
@@ -114,6 +119,8 @@ Products:
 - `POST /api/admin/products`
 - `PATCH /api/admin/products/:id`
 - `POST /api/admin/products/:id/price`
+- `DELETE /api/admin/products/:id`
+  - Soft-deletes a product from the admin/kiosk lists while preserving history
 
 Stock / restock:
 
@@ -142,6 +149,10 @@ Users:
 - `POST /api/admin/users`
 - `PATCH /api/admin/users/:id`
 - `POST /api/admin/users/:id/badge`
+- `DELETE /api/admin/users/:id/badge`
+- `POST /api/admin/users/:id/topup`
+- `DELETE /api/admin/users/:id`
+  - Soft-deletes a user from the admin list while preserving history
 
 ## Frontend Structure
 
@@ -156,7 +167,7 @@ Purpose:
 - Display available drinks
 - Build a cart
 - Submit orders
-- Show current debt summary
+- Show current account summary, including prepaid balance
 
 Main files:
 
@@ -180,7 +191,7 @@ Purpose:
 
 - Manage products and prices
 - Adjust stock
-- Manage users and RFID badges
+- Manage users, multiple RFID badges, and prepaid balances
 - Close periods
 - Review and mark debts as paid
 - Display debt summary by user
@@ -194,7 +205,7 @@ Main files:
 - `admin/src/pages/RestockPage.tsx`: stock input form and correction/restock submission
 - `admin/src/pages/DebtsPage.tsx`: close period and manage debt payment state
 - `admin/src/pages/DebtSummaryPage.tsx`: debt overview by user with detail panel
-- `admin/src/pages/UsersPage.tsx`: user creation, activation, rename, RFID linking
+- `admin/src/pages/UsersPage.tsx`: user creation, activation, rename, multi-badge management, balance top-up, and user removal
 
 ## Database Structure
 
@@ -204,10 +215,14 @@ Migrations are stored in `backend/src/db/migrations/`:
 
 - `001_init.sql`
 - `002_billing_periods.sql`
+- `003_accounts_badges_soft_delete.sql`
+- `004_prepaid_orders.sql`
 
 Core tables:
 
 - `users`: users and RFID mapping
+- `user_badges`: multiple badge IDs per user
+- `account_transactions`: prepaid balance ledger
 - `products`: drink catalog
 - `product_prices`: price history per product
 - `stock_current`: current stock per product
@@ -306,6 +321,15 @@ Relevant backend environment variables:
 - `ADMIN_TOKEN`
 - `PRODUCT_SLUG_PATH`
 
+### Required migration step
+
+If the project is already deployed, you must run backend migrations before starting the updated app, because the new code depends on:
+
+- user soft-delete support
+- multiple user badge IDs
+- prepaid user balances
+- prepaid order tracking
+
 ### Frontends
 
 From `kiosk/` or `admin/`:
@@ -332,6 +356,8 @@ Services:
 - CORS is currently configured in `backend/src/index.ts` for `http://localhost:5173`.
 - Product images are resolved through an image slug mapping stored in `data/product_slugs.json`.
 - There are two debt models in the database: older `monthly_debts` logic and current `billing_periods` / `period_debts` logic. The current admin UI uses the billing period flow.
+- Kiosk orders are now prepaid from `users.balance_cents`; only unpaid orders are included in period/month debt closing.
+- User and product removal are implemented as soft deletes to preserve historical data.
 - If you change Nginx configuration, validate and reload it:
   - `sudo nginx -t`
   - `sudo systemctl reload nginx`

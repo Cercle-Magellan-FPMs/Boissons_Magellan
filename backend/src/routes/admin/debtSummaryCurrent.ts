@@ -48,6 +48,7 @@ export async function adminDebtSummaryCurrentRoutes(app: FastifyInstance) {
           FROM orders o
           WHERE o.user_id = u.id
             AND o.status='committed'
+            AND COALESCE(o.paid_from_balance, 0) = 0
             AND CAST(strftime('%Y-%m', o.ts) AS TEXT) = ?
             AND NOT EXISTS (
               SELECT 1 FROM billing_periods bp 

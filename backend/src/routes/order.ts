@@ -28,7 +28,12 @@ export async function orderRoutes(app: FastifyInstance) {
     const db = getDB();
 
     const tx = db.transaction(() => {
-      const user = db.prepare(`SELECT id, is_active FROM users WHERE id = ?`).get(user_id) as any;
+      const user = db.prepare(`
+        SELECT id, is_active, balance_cents
+        FROM users
+        WHERE id = ?
+          AND deleted_at IS NULL
+      `).get(user_id) as any;
       if (!user) throw new Error("USER_NOT_FOUND");
       if (user.is_active !== 1) throw new Error("USER_DISABLED");
 
@@ -36,17 +41,24 @@ export async function orderRoutes(app: FastifyInstance) {
       let total = 0;
       const resolved = items.map((it) => {
         const stock = db.prepare(
-          `SELECT qty FROM stock_current WHERE product_id = ?`
+          `SELECT sc.qty
+           FROM stock_current sc
+           JOIN products p ON p.id = sc.product_id
+           WHERE sc.product_id = ?
+             AND p.deleted_at IS NULL`
         ).get(it.product_id) as any;
 
         const qtyAvailable = stock ? Number(stock.qty) : 0;
         if (qtyAvailable < it.qty) throw new Error("OUT_OF_STOCK");
 
         const priceRow = db.prepare(
-          `SELECT price_cents
-           FROM product_prices
-           WHERE product_id = ? AND starts_at <= datetime('now')
-           ORDER BY starts_at DESC
+          `SELECT pp.price_cents
+           FROM product_prices pp
+           JOIN products p ON p.id = pp.product_id
+           WHERE pp.product_id = ?
+             AND p.deleted_at IS NULL
+             AND pp.starts_at <= datetime('now')
+           ORDER BY pp.starts_at DESC
            LIMIT 1`
         ).get(it.product_id) as any;
 
@@ -58,12 +70,15 @@ export async function orderRoutes(app: FastifyInstance) {
         return { ...it, unit_price_cents: unit };
       });
 
+      const currentBalance = Number(user.balance_cents ?? 0);
+      if (currentBalance < total) throw new Error("INSUFFICIENT_BALANCE");
+
       const orderId = randomUUID();
       const monthKey = getMonthKeyParisLike();
 
       db.prepare(
-        `INSERT INTO orders (id, user_id, month_key, total_cents, status)
-         VALUES (?, ?, ?, ?, 'committed')`
+        `INSERT INTO orders (id, user_id, month_key, total_cents, status, paid_from_balance)
+         VALUES (?, ?, ?, ?, 'committed', 1)`
       ).run(orderId, user_id, monthKey, total);
 
       const insertItem = db.prepare(
@@ -81,13 +96,28 @@ export async function orderRoutes(app: FastifyInstance) {
         `UPDATE stock_current SET qty = qty - ? WHERE product_id = ?`
       );
 
+      db.prepare(`
+        UPDATE users
+        SET balance_cents = balance_cents - ?
+        WHERE id = ?
+      `).run(total, user_id);
+
+      db.prepare(`
+        INSERT INTO account_transactions (id, user_id, delta_cents, reason, comment)
+        VALUES (?, ?, ?, 'purchase', ?)
+      `).run(randomUUID(), user_id, -total, "achat kiosk");
+
       for (const r of resolved) {
         insertItem.run(orderId, r.product_id, r.qty, r.unit_price_cents);
         insertMove.run(moveId, r.product_id, -r.qty, orderId, "vente kiosk");
         updateStock.run(r.qty, r.product_id);
       }
 
-      return { order_id: orderId, total_cents: total };
+      return {
+        order_id: orderId,
+        total_cents: total,
+        balance_cents: currentBalance - total,
+      };
     });
 
     try {
@@ -98,6 +128,7 @@ export async function orderRoutes(app: FastifyInstance) {
       if (msg.includes("USER_DISABLED")) return reply.code(403).send({ error: "User disabled" });
       if (msg.includes("USER_NOT_FOUND")) return reply.code(404).send({ error: "User not found" });
       if (msg.includes("OUT_OF_STOCK")) return reply.code(409).send({ error: "Out of stock" });
+      if (msg.includes("INSUFFICIENT_BALANCE")) return reply.code(409).send({ error: "Insufficient balance" });
       if (msg.includes("PRICE_MISSING")) return reply.code(500).send({ error: "Price missing" });
       return reply.code(500).send({ error: "Internal error" });
     }

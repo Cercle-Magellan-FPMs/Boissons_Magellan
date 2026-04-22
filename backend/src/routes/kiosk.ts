@@ -13,22 +13,31 @@ export async function kioskRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "Invalid payload" });
     }
 
-    const uid = parsed.data.uid.trim();
+    const uid = parsed.data.uid.trim().toUpperCase();
 
     const db = getDB();
     type DbUser = {
       id: number;
       name: string;
-      rfid_uid: string;
+      rfid_uid: string | null;
       is_active: number; // 0/1 en SQLite
+      balance_cents: number;
     };
     const user = db
       .prepare(
-        `SELECT id, name, email, rfid_uid, is_active
-         FROM users
-         WHERE rfid_uid = ?`
+        `SELECT DISTINCT
+           u.id,
+           u.name,
+           u.email,
+           u.rfid_uid,
+           u.is_active,
+           u.balance_cents
+         FROM users u
+         LEFT JOIN user_badges ub ON ub.user_id = u.id
+         WHERE u.deleted_at IS NULL
+           AND (ub.uid = ? OR u.rfid_uid = ?)`
       )
-      .get(uid) as DbUser | undefined;
+      .get(uid, uid) as DbUser | undefined;
 
     if (!user) {
       return reply.code(404).send({ error: "Badge not recognized" });
@@ -54,7 +63,12 @@ export async function kioskRoutes(app: FastifyInstance) {
     const db = getDB();
 
     const user = db
-      .prepare(`SELECT id, name, is_active FROM users WHERE id = ?`)
+      .prepare(`
+        SELECT id, name, is_active, balance_cents
+        FROM users
+        WHERE id = ?
+          AND deleted_at IS NULL
+      `)
       .get(userId) as any;
 
     if (!user) {
@@ -84,6 +98,7 @@ export async function kioskRoutes(app: FastifyInstance) {
       FROM orders
       WHERE user_id = ?
         AND status = 'committed'
+        AND COALESCE(paid_from_balance, 0) = 0
         AND ts >= ?
     `).get(userId, last_end_ts) as any;
 
@@ -116,6 +131,7 @@ export async function kioskRoutes(app: FastifyInstance) {
       JOIN products p ON p.id = oi.product_id
       WHERE o.user_id = ?
         AND o.status = 'committed'
+        AND COALESCE(o.paid_from_balance, 0) = 0
         AND o.ts >= ?
       GROUP BY oi.product_id, p.name
     `).all(userId, last_end_ts) as Array<{ product_id: number; product_name: string; qty: number }>;
@@ -138,6 +154,7 @@ export async function kioskRoutes(app: FastifyInstance) {
 
     return reply.send({
       user_id: userId,
+      balance_cents: Number(user.balance_cents ?? 0),
       unpaid_closed_cents,
       open_cents,
       total_cents,

@@ -33,6 +33,7 @@ export async function adminClosePeriodRoutes(app: FastifyInstance) {
       SELECT user_id, SUM(total_cents) AS amount_cents
       FROM orders
       WHERE status='committed'
+        AND COALESCE(paid_from_balance, 0) = 0
         AND ts >= ? AND ts < ?
       GROUP BY user_id
       HAVING SUM(total_cents) > 0

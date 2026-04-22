@@ -23,6 +23,7 @@ export async function productRoutes(app: FastifyInstance) {
       FROM products p
       LEFT JOIN stock_current sc ON sc.product_id = p.id
       WHERE p.is_active = 1
+        AND p.deleted_at IS NULL
       ORDER BY p.name ASC
     `).all() as Array<any>;
 

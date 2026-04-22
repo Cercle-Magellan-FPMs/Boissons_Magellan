@@ -1,17 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-
-type UserRow = {
-  id: number;
-  name: string;
-  email: string | null;
-  rfid_uid: string | null;
-  is_active: number;
-  created_at: string;
-};
+import type { AdminUser } from "../lib/types";
+import { eurosFromCents } from "../lib/types";
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<UserRow[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [error, setError] = useState("");
   const [nameFilter, setNameFilter] = useState("");
 
@@ -20,14 +13,14 @@ export default function UsersPage() {
   const [rfid, setRfid] = useState("");
   const [active, setActive] = useState(true);
 
-  const [badgeModalUser, setBadgeModalUser] = useState<UserRow | null>(null);
+  const [badgeModalUser, setBadgeModalUser] = useState<AdminUser | null>(null);
   const [badgeInput, setBadgeInput] = useState("");
   const badgeInputRef = useRef<HTMLInputElement | null>(null);
 
   async function load() {
     setError("");
     try {
-      const data = await api<{ users: UserRow[] }>("/api/admin/users");
+      const data = await api<{ users: AdminUser[] }>("/api/admin/users");
       setUsers(data.users);
     } catch (e: any) {
       setError(e.message);
@@ -41,6 +34,12 @@ export default function UsersPage() {
     const t = window.setTimeout(() => badgeInputRef.current?.focus(), 50);
     return () => window.clearTimeout(t);
   }, [badgeModalUser]);
+
+  useEffect(() => {
+    if (!badgeModalUser) return;
+    const freshUser = users.find((user) => user.id === badgeModalUser.id) || null;
+    setBadgeModalUser(freshUser);
+  }, [users, badgeModalUser]);
 
   async function addUser() {
     if (!name.trim()) return;
@@ -64,7 +63,7 @@ export default function UsersPage() {
     }
   }
 
-  async function toggleActive(u: UserRow) {
+  async function toggleActive(u: AdminUser) {
     try {
       await api(`/api/admin/users/${u.id}`, {
         method: "PATCH",
@@ -76,7 +75,7 @@ export default function UsersPage() {
     }
   }
 
-  async function submitBadge() {
+  async function addBadge() {
     if (!badgeModalUser) return;
     const uid = badgeInput.trim();
     if (!uid) return;
@@ -85,7 +84,6 @@ export default function UsersPage() {
         method: "POST",
         body: JSON.stringify({ rfid_uid: uid }),
       });
-      setBadgeModalUser(null);
       setBadgeInput("");
       await load();
     } catch (e: any) {
@@ -93,12 +91,25 @@ export default function UsersPage() {
     }
   }
 
-  function openBadgeModal(u: UserRow) {
-    setBadgeInput(u.rfid_uid || "");
+  async function removeBadge(user: AdminUser, uid: string) {
+    if (!confirm(`Supprimer le badge "${uid}" de ${user.name} ?`)) return;
+    try {
+      await api(`/api/admin/users/${user.id}/badge`, {
+        method: "DELETE",
+        body: JSON.stringify({ rfid_uid: uid }),
+      });
+      await load();
+    } catch (e: any) {
+      alert(e.message);
+    }
+  }
+
+  function openBadgeModal(u: AdminUser) {
+    setBadgeInput("");
     setBadgeModalUser(u);
   }
 
-  async function rename(u: UserRow) {
+  async function rename(u: AdminUser) {
     const n = prompt("Nouveau nom", u.name);
     if (!n) return;
     try {
@@ -106,6 +117,51 @@ export default function UsersPage() {
         method: "PATCH",
         body: JSON.stringify({ name: n }),
       });
+      await load();
+    } catch (e: any) {
+      alert(e.message);
+    }
+  }
+
+  async function topUp(user: AdminUser) {
+    const amount = prompt(
+      "Montant en EUR. Utilisez une valeur negative pour un ajustement manuel.",
+      "10"
+    );
+    if (amount == null) return;
+
+    const value = Math.round(Number(amount.replace(",", ".")) * 100);
+    if (!Number.isFinite(value) || value === 0) {
+      alert("Montant invalide");
+      return;
+    }
+
+    const comment = prompt("Commentaire (optionnel)", "") ?? "";
+
+    try {
+      await api(`/api/admin/users/${user.id}/topup`, {
+        method: "POST",
+        body: JSON.stringify({
+          amount_cents: value,
+          comment: comment.trim() || undefined,
+        }),
+      });
+      await load();
+    } catch (e: any) {
+      alert(e.message);
+    }
+  }
+
+  async function removeUser(user: AdminUser) {
+    if (!confirm(`Supprimer ${user.name} de la liste des utilisateurs ?`)) return;
+    try {
+      await api(`/api/admin/users/${user.id}`, {
+        method: "DELETE",
+      });
+      if (badgeModalUser?.id === user.id) {
+        setBadgeModalUser(null);
+        setBadgeInput("");
+      }
       await load();
     } catch (e: any) {
       alert(e.message);
@@ -125,7 +181,7 @@ export default function UsersPage() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom" style={{ padding: 8, minWidth: 180 }} />
           <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (optionnel)" style={{ padding: 8, minWidth: 220 }} />
-          <input value={rfid} onChange={(e) => setRfid(e.target.value)} placeholder="UID badge" style={{ padding: 8, minWidth: 200 }} />
+          <input value={rfid} onChange={(e) => setRfid(e.target.value)} placeholder="UID badge initial" style={{ padding: 8, minWidth: 200 }} />
           <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
             Actif
@@ -145,7 +201,7 @@ export default function UsersPage() {
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
           <label>
-            Rechercher : {""}
+            Rechercher :{" "}
             <input
               value={nameFilter}
               onChange={(e) => setNameFilter(e.target.value)}
@@ -160,7 +216,7 @@ export default function UsersPage() {
               key={u.id}
               style={{
                 display: "grid",
-                gridTemplateColumns: "2fr 2fr 2fr auto",
+                gridTemplateColumns: "2fr 1.3fr 2fr auto",
                 gap: 8,
                 alignItems: "center",
                 padding: 10,
@@ -172,18 +228,27 @@ export default function UsersPage() {
               <div>
                 <div style={{ fontWeight: 900 }}>{u.name}</div>
                 <div style={{ opacity: 0.7 }}>ID: {u.id}</div>
+                <div style={{ opacity: 0.85 }}>{u.email || "--"}</div>
               </div>
 
-              <div style={{ opacity: 0.85 }}>{u.email || "--"}</div>
+              <div>
+                <div style={{ fontWeight: 900 }}>{eurosFromCents(u.balance_cents)}</div>
+                <div style={{ opacity: 0.7 }}>Solde disponible</div>
+              </div>
 
               <div style={{ opacity: 0.85 }}>
-                Badge: <b>{u.rfid_uid || "--"}</b>
+                Badges:{" "}
+                <b>{u.badge_uids.length > 0 ? u.badge_uids.join(", ") : "--"}</b>
               </div>
 
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
                 <button onClick={() => rename(u)}>Renommer</button>
-                <button onClick={() => openBadgeModal(u)}>{u.rfid_uid ? "Changer badge" : "Lier badge"}</button>
+                <button onClick={() => openBadgeModal(u)}>
+                  {u.badge_uids.length > 0 ? "Gerer badges" : "Lier badge"}
+                </button>
+                <button onClick={() => topUp(u)}>Recharger</button>
                 <button onClick={() => toggleActive(u)}>{u.is_active === 1 ? "Desactiver" : "Activer"}</button>
+                <button onClick={() => removeUser(u)}>Supprimer</button>
               </div>
             </div>
           ))}
@@ -206,7 +271,7 @@ export default function UsersPage() {
         >
           <div
             style={{
-              width: "min(420px, 92vw)",
+              width: "min(560px, 92vw)",
               background: "var(--panel)",
               border: "1px solid var(--border)",
               borderRadius: 16,
@@ -218,27 +283,54 @@ export default function UsersPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div>
-              <div style={{ fontWeight: 700, fontSize: "1.1rem" }}>Scanner un badge</div>
+              <div style={{ fontWeight: 700, fontSize: "1.1rem" }}>Badges utilisateur</div>
               <div style={{ opacity: 0.7 }}>
-                Scannez le badge RFID ou entrez le code manuellement.
+                {badgeModalUser.name}
               </div>
             </div>
 
-            <input
-              ref={badgeInputRef}
-              value={badgeInput}
-              onChange={(e) => setBadgeInput(e.target.value)}
-              placeholder="UID badge"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") submitBadge();
-              }}
-            />
+            <div style={{ display: "grid", gap: 8 }}>
+              {badgeModalUser.badge_uids.length === 0 ? (
+                <div style={{ opacity: 0.7 }}>Aucun badge lie.</div>
+              ) : (
+                badgeModalUser.badge_uids.map((uid) => (
+                  <div
+                    key={uid}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 8,
+                      alignItems: "center",
+                      border: "1px solid var(--border)",
+                      borderRadius: 10,
+                      padding: "10px 12px",
+                    }}
+                  >
+                    <strong>{uid}</strong>
+                    <button onClick={() => removeBadge(badgeModalUser, uid)}>Supprimer</button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                ref={badgeInputRef}
+                value={badgeInput}
+                onChange={(e) => setBadgeInput(e.target.value)}
+                placeholder="Scanner ou saisir un nouveau badge"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") addBadge();
+                }}
+                style={{ flex: 1 }}
+              />
+              <button onClick={addBadge} disabled={!badgeInput.trim()} style={{ fontWeight: 700 }}>
+                Ajouter
+              </button>
+            </div>
 
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button onClick={() => setBadgeModalUser(null)}>Annuler</button>
-              <button onClick={submitBadge} disabled={!badgeInput.trim()} style={{ fontWeight: 700 }}>
-                Enregistrer
-              </button>
+              <button onClick={() => setBadgeModalUser(null)}>Fermer</button>
             </div>
           </div>
         </div>

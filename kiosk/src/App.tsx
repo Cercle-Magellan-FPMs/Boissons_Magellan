@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 
-type User = { id: number; name: string; is_active: number };
+type User = { id: number; name: string; is_active: number; balance_cents: number };
 type Product = { id: number; name: string; price_cents: number | null; qty: number; available: boolean; image_slug?: string | null };
 type Cart = Record<number, number>;
 type DebtItem = { product_id: number; product_name: string; qty: number };
 type DebtSummary = {
+  balance_cents: number;
   unpaid_closed_cents: number;
   open_cents: number;
   total_cents: number;
@@ -109,6 +110,7 @@ export default function App() {
 
     const data = await res.json();
     setDebt(data);
+    setUser((current) => current ? { ...current, balance_cents: Number(data.balance_cents ?? current.balance_cents) } : current);
   }
 
   function onBadgeKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -187,8 +189,10 @@ export default function App() {
       return;
     }
 
+    const data = await res.json();
+    setUser((current) => current ? { ...current, balance_cents: Number(data.balance_cents ?? current.balance_cents) } : current);
     setScreen("thanks");
-    setStatus("Commande enregistrée.");
+    setStatus(`Commande enregistree. Solde restant: ${euros(Number(data.balance_cents ?? 0))}`);
 
     setTimeout(() => {
       setUser(null);
@@ -227,6 +231,7 @@ export default function App() {
               <div>
                 <p className="kiosk-greeting">Bonjour</p>
                 <h2>{user.name}</h2>
+                <p className="badge-status">Solde: {euros(user.balance_cents)}</p>
               </div>
               <div className="header-actions">
                 <button
@@ -236,7 +241,7 @@ export default function App() {
                     setDebtModalOpen(true);
                   }}
                 >
-                  Ma dette
+                  Mon compte
                 </button>
                 <button
                   className="ghost-button"
@@ -343,7 +348,7 @@ export default function App() {
             <section className="debt-card debt-modal">
               <header className="debt-header">
                 <div>
-                  <p className="kiosk-greeting">Votre dette</p>
+                  <p className="kiosk-greeting">Votre compte</p>
                   <h2>{user.name}</h2>
                 </div>
                 <button className="ghost-button" onClick={() => setDebtModalOpen(false)}>
@@ -358,9 +363,10 @@ export default function App() {
               ) : (
                 <div className="debt-grid">
                   <div className="debt-total">
-                    <span>Dette totale</span>
-                    <strong>{euros(debt.total_cents)}</strong>
+                    <span>Solde disponible</span>
+                    <strong>{euros(debt.balance_cents)}</strong>
                     <div className="debt-split">
+                      <span>Dette totale: {euros(debt.total_cents)}</span>
                       <span>Dette impayee: {euros(debt.unpaid_closed_cents)}</span>
                       <span>Dette en cours: {euros(debt.open_cents)}</span>
                     </div>
