@@ -138,6 +138,13 @@ export default function App() {
   }
 
   function onBadgeKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
+      e.preventDefault();
+      e.currentTarget.value = "";
+      setStatus("Collage désactivé. Utilisez uniquement le lecteur badge.");
+      return;
+    }
+
     if (e.key === "Enter") {
       e.preventDefault();
       const uid = e.currentTarget.value;
@@ -153,6 +160,12 @@ export default function App() {
 
   function onBadgeInput(e: React.FormEvent<HTMLInputElement>) {
     const input = e.currentTarget;
+    const nativeEvent = e.nativeEvent as InputEvent | undefined;
+    if (nativeEvent?.inputType === "insertFromPaste") {
+      input.value = "";
+      setStatus("Collage désactivé. Utilisez uniquement le lecteur badge.");
+      return;
+    }
     if (scanTimeoutRef.current) {
       window.clearTimeout(scanTimeoutRef.current);
     }
@@ -244,6 +257,16 @@ export default function App() {
           className="badge-input"
           onKeyDown={screen === "badge" ? onBadgeKeyDown : undefined}
           onInput={screen === "badge" ? onBadgeInput : undefined}
+          onPaste={screen === "badge" ? (e) => {
+            e.preventDefault();
+            e.currentTarget.value = "";
+            setStatus("Collage désactivé. Utilisez uniquement le lecteur badge.");
+          } : undefined}
+          onDrop={screen === "badge" ? (e) => {
+            e.preventDefault();
+            e.currentTarget.value = "";
+            setStatus("Glisser-déposer désactivé. Utilisez uniquement le lecteur badge.");
+          } : undefined}
         />
 
         {screen === "badge" && (
