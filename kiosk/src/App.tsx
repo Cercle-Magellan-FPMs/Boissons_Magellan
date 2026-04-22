@@ -99,6 +99,10 @@ export default function App() {
         showBlockedModal(err.user?.name);
         return;
       }
+      if (res.status === 409 && err.error === "Insufficient balance") {
+        setStatus("Solde insuffisant. Rechargez votre compte avant de commander.");
+        return;
+      }
       setStatus(err.error || `Erreur (${res.status})`);
       return;
     }
@@ -344,9 +348,7 @@ export default function App() {
                       )}
                       <div className="tile-info">
                         <div className="tile-title">{p.name}</div>
-                        <div className="tile-status">
-                          {canAdd ? `Stock actuel: ${p.qty}` : "Prix manquant"}
-                        </div>
+                        <div className="tile-status">{canAdd ? "Disponible" : "Prix manquant"}</div>
                       </div>
                       <div className="tile-price">
                         {p.price_cents == null ? "Prix manquant" : euros(p.price_cents)}
