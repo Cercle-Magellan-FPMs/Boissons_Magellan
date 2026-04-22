@@ -48,6 +48,29 @@ The default deployed architecture is:
 
 The SQLite database is mounted from `/var/lib/boissons` in Docker Compose.
 
+## Host VM Deployment
+
+For a Docker-free deployment directly on the VM, use:
+
+- `ops/vm/deploy-host.sh`
+
+This script is intended to provision and deploy the application stack directly on Ubuntu:
+
+- installs required host packages, including `nginx`
+- ensures Node.js 20 is available
+- builds `backend`, `admin`, and `kiosk` on the VM
+- publishes static files under `/var/www/boissons`
+- installs `boissons-backend.service` in `systemd`
+- installs a host nginx site that serves `/kiosk/`, `/admin/`, `/api/kiosk/`, and `/api/admin/`
+- optionally installs a daily backup timer
+- optionally stops the existing Docker Compose stack
+
+Default runtime paths used by the script:
+
+- database: `/var/lib/boissons/app.db`
+- static files: `/var/www/boissons`
+- backups: `/var/backups/boissons`
+
 ## Public URLs And Reverse Proxy Routes
 
 Defined in `ops/nginx/nginx.conf`:
