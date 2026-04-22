@@ -91,7 +91,8 @@ Registered route groups:
 
 - `POST /api/kiosk/identify`
   - Identifies a user from an RFID UID
-  - Normalizes scanned values before lookup and matches both `users.rfid_uid` and `user_badges.uid`
+  - Normalizes scanned values before lookup, including common AZERTY keyboard-wedge digit substitutions such as `à -> 0` and `ç -> 9`
+  - Matches both `users.rfid_uid` and `user_badges.uid`
   - Request body: `{ uid: string }`
 
 - `GET /api/kiosk/debt/:userId`

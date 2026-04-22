@@ -1,19 +1,25 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { getDB } from "../db/db.js";
+import { badgeUidCandidates, normalizeBadgeUid } from "../lib/badgeUid.js";
 
 export async function kioskRoutes(app: FastifyInstance) {
   app.post("/api/kiosk/identify", async (req, reply) => {
     const bodySchema = z.object({
       uid: z.string().min(1),
     });
-    req.log.info({ body: req.body }, "identify payload");
     const parsed = bodySchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Invalid payload" });
     }
 
-    const uid = parsed.data.uid.trim().toUpperCase();
+    const rawUid = parsed.data.uid;
+    const normalizedUid = normalizeBadgeUid(rawUid);
+    const uidCandidates = badgeUidCandidates(rawUid);
+    req.log.info({ rawUid, normalizedUid, uidCandidates }, "badge identify");
+    if (!normalizedUid) {
+      return reply.code(400).send({ error: "Invalid badge UID" });
+    }
 
     const db = getDB();
     type DbUser = {
@@ -24,6 +30,7 @@ export async function kioskRoutes(app: FastifyInstance) {
       is_active: number; // 0/1 en SQLite
       balance_cents: number;
     };
+    const candidatePlaceholders = uidCandidates.map(() => "?").join(", ");
     const user = db
       .prepare(
         `SELECT
@@ -36,17 +43,17 @@ export async function kioskRoutes(app: FastifyInstance) {
          FROM users u
          WHERE u.deleted_at IS NULL
            AND (
-             u.rfid_uid = ?
+             u.rfid_uid IN (${candidatePlaceholders})
              OR EXISTS (
                SELECT 1
                FROM user_badges ub
                WHERE ub.user_id = u.id
-                 AND ub.uid = ?
+                 AND ub.uid IN (${candidatePlaceholders})
              )
            )
          LIMIT 1`
       )
-      .get(uid, uid) as DbUser | undefined;
+      .get(...uidCandidates, ...uidCandidates) as DbUser | undefined;
 
     if (!user) {
       return reply.code(404).send({ error: "Badge not recognized" });

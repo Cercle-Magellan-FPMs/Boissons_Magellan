@@ -3,9 +3,10 @@ import { z } from "zod";
 import { randomUUID } from "crypto";
 import { getDB } from "../../db/db.js";
 import { requireAdmin } from "./_auth.js";
+import { normalizeBadgeUid } from "../../lib/badgeUid.js";
 
 function normUid(uid: string) {
-  return uid.trim().toUpperCase();
+  return normalizeBadgeUid(uid);
 }
 
 export async function adminUserRoutes(app: FastifyInstance) {
