@@ -130,7 +130,11 @@ export async function orderRoutes(app: FastifyInstance) {
       if (msg.includes("USER_DISABLED")) return reply.code(403).send({ error: "User disabled" });
       if (msg.includes("USER_NOT_FOUND")) return reply.code(404).send({ error: "User not found" });
       if (msg.includes("PRODUCT_NOT_FOUND")) return reply.code(404).send({ error: "Product not found" });
-      if (msg.includes("INSUFFICIENT_BALANCE")) return reply.code(409).send({ error: "Insufficient balance" });
+      if (msg.includes("INSUFFICIENT_BALANCE")) {
+        return reply.code(409).send({
+          error: "Solde insuffisant, merci de faire un virement au compte suivant : BE70 7512 1182 7125",
+        });
+      }
       if (msg.includes("PRICE_MISSING")) return reply.code(500).send({ error: "Price missing" });
       return reply.code(500).send({ error: "Internal error" });
     }

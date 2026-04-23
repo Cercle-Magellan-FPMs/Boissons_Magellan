@@ -19,6 +19,8 @@ export default function UsersPage() {
   const [topUpModalUser, setTopUpModalUser] = useState<AdminUser | null>(null);
   const [topUpAmount, setTopUpAmount] = useState("10");
   const [topUpComment, setTopUpComment] = useState("");
+  const [topUpPaymentDate, setTopUpPaymentDate] = useState(new Date().toISOString().slice(0, 10));
+  const [topUpPaymentMethod, setTopUpPaymentMethod] = useState<"bank_transfer" | "cash">("bank_transfer");
 
   async function load() {
     setError("");
@@ -52,12 +54,16 @@ export default function UsersPage() {
 
   async function addUser() {
     if (!name.trim()) return;
+    if (!email.trim()) {
+      alert("L'email est obligatoire.");
+      return;
+    }
     try {
       await api("/api/admin/users", {
         method: "POST",
         body: JSON.stringify({
           name: name.trim(),
-          email: email.trim() || undefined,
+          email: email.trim(),
           rfid_uid: rfid.trim() || undefined,
           is_active: active,
         }),
@@ -136,6 +142,8 @@ export default function UsersPage() {
     setTopUpModalUser(user);
     setTopUpAmount("10");
     setTopUpComment("");
+    setTopUpPaymentDate(new Date().toISOString().slice(0, 10));
+    setTopUpPaymentMethod("bank_transfer");
   }
 
   async function submitTopUp() {
@@ -146,18 +154,30 @@ export default function UsersPage() {
       alert("Montant invalide");
       return;
     }
+    if (!topUpComment.trim()) {
+      alert("Le commentaire est obligatoire.");
+      return;
+    }
+    if (value > 0 && !/^\d{4}-\d{2}-\d{2}$/.test(topUpPaymentDate)) {
+      alert("Date de paiement invalide.");
+      return;
+    }
 
     try {
       await api(`/api/admin/users/${topUpModalUser.id}/topup`, {
         method: "POST",
         body: JSON.stringify({
           amount_cents: value,
-          comment: topUpComment.trim() || undefined,
+          comment: topUpComment.trim(),
+          payment_date: topUpPaymentDate,
+          payment_method: topUpPaymentMethod,
         }),
       });
       setTopUpModalUser(null);
       setTopUpAmount("10");
       setTopUpComment("");
+      setTopUpPaymentDate(new Date().toISOString().slice(0, 10));
+      setTopUpPaymentMethod("bank_transfer");
       await load();
     } catch (e: any) {
       alert(e.message);
@@ -192,7 +212,7 @@ export default function UsersPage() {
         <h3 style={{ marginTop: 0 }}>Ajouter un utilisateur</h3>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom" style={{ padding: 8, minWidth: 180 }} />
-          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (optionnel)" style={{ padding: 8, minWidth: 220 }} />
+          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (obligatoire)" style={{ padding: 8, minWidth: 220 }} />
           <input value={rfid} onChange={(e) => setRfid(e.target.value)} placeholder="UID badge initial" style={{ padding: 8, minWidth: 200 }} />
           <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
@@ -399,11 +419,31 @@ export default function UsersPage() {
               <input
                 value={topUpComment}
                 onChange={(e) => setTopUpComment(e.target.value)}
-                placeholder="Optionnel"
+                placeholder="Obligatoire (reference, motif...)"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") submitTopUp();
                 }}
               />
+            </label>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span>Date du virement/paiement liquide</span>
+              <input
+                type="date"
+                value={topUpPaymentDate}
+                onChange={(e) => setTopUpPaymentDate(e.target.value)}
+              />
+            </label>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span>Méthode</span>
+              <select
+                value={topUpPaymentMethod}
+                onChange={(e) => setTopUpPaymentMethod(e.target.value as "bank_transfer" | "cash")}
+              >
+                <option value="bank_transfer">Virement</option>
+                <option value="cash">Paiement liquide</option>
+              </select>
             </label>
 
             <div style={{ opacity: 0.75, fontSize: "0.95rem" }}>

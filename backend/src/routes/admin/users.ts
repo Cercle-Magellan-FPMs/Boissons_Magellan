@@ -10,6 +10,9 @@ function normUid(uid: string) {
 }
 
 export async function adminUserRoutes(app: FastifyInstance) {
+  const paymentDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+  const paymentMethodSchema = z.enum(["bank_transfer", "cash"]);
+
   async function softDeleteUser(id: number) {
     const db = getDB();
 
@@ -83,7 +86,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
 
     const schema = z.object({
       name: z.string().min(1),
-      email: z.string().email().optional().or(z.literal("")).optional(),
+      email: z.string().email(),
       is_active: z.boolean().optional().default(true),
       rfid_uid: z.string().optional().or(z.literal("")).optional(), // optionnel
     });
@@ -92,7 +95,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.code(400).send({ error: "Invalid payload" });
 
     const name = parsed.data.name.trim();
-    const email = parsed.data.email ? parsed.data.email.trim() : null;
+    const email = parsed.data.email.trim();
     const is_active = parsed.data.is_active ? 1 : 0;
     const rfid_uid = parsed.data.rfid_uid ? normUid(parsed.data.rfid_uid) : null;
 
@@ -103,7 +106,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
         const result = db.prepare(`
           INSERT INTO users (name, email, rfid_uid, is_active, balance_cents)
           VALUES (?, ?, ?, ?, 0)
-        `).run(name, email || null, rfid_uid, is_active);
+        `).run(name, email, rfid_uid, is_active);
 
         const userId = Number(result.lastInsertRowid);
 
@@ -138,7 +141,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
     const paramsSchema = z.object({ id: z.coerce.number().int().positive() });
     const bodySchema = z.object({
       name: z.string().min(1).optional(),
-      email: z.string().email().nullable().optional(),
+      email: z.string().email().optional(),
       is_active: z.boolean().optional(),
     });
 
@@ -156,7 +159,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
     const args: any[] = [];
 
     if (b.data.name !== undefined) { updates.push("name=?"); args.push(b.data.name.trim()); }
-    if (b.data.email !== undefined) { updates.push("email=?"); args.push(b.data.email); }
+    if (b.data.email !== undefined) { updates.push("email=?"); args.push(b.data.email.trim()); }
     if (b.data.is_active !== undefined) { updates.push("is_active=?"); args.push(b.data.is_active ? 1 : 0); }
 
     if (updates.length === 0) return reply.send({ ok: true });
@@ -266,7 +269,9 @@ export async function adminUserRoutes(app: FastifyInstance) {
     const paramsSchema = z.object({ id: z.coerce.number().int().positive() });
     const bodySchema = z.object({
       amount_cents: z.number().int().refine((value) => value !== 0, { message: "amount must be non-zero" }),
-      comment: z.string().optional(),
+      comment: z.string().trim().min(1),
+      payment_date: paymentDateSchema.optional(),
+      payment_method: paymentMethodSchema.optional(),
     });
 
     const p = paramsSchema.safeParse(req.params);
@@ -274,8 +279,12 @@ export async function adminUserRoutes(app: FastifyInstance) {
     if (!p.success || !b.success) return reply.code(400).send({ error: "Invalid payload" });
 
     const { id } = p.data;
-    const { amount_cents, comment } = b.data;
+    const { amount_cents, comment, payment_date, payment_method } = b.data;
     const db = getDB();
+
+    if (amount_cents > 0 && (!payment_date || !payment_method)) {
+      return reply.code(400).send({ error: "payment_date and payment_method are required for topups" });
+    }
 
     try {
       const tx = db.transaction(() => {
@@ -295,15 +304,20 @@ export async function adminUserRoutes(app: FastifyInstance) {
           WHERE id = ?
         `).run(nextBalance, id);
 
+        const transactionId = randomUUID();
         db.prepare(`
-          INSERT INTO account_transactions (id, user_id, delta_cents, reason, comment)
-          VALUES (?, ?, ?, ?, ?)
+          INSERT INTO account_transactions (
+            id, user_id, delta_cents, reason, comment, payment_date, payment_method
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?)
         `).run(
-          randomUUID(),
+          transactionId,
           id,
           amount_cents,
           amount_cents > 0 ? "topup" : "adjustment",
-          comment?.trim() || null
+          comment.trim(),
+          amount_cents > 0 ? payment_date : null,
+          amount_cents > 0 ? payment_method : null
         );
 
         return nextBalance;
@@ -318,6 +332,78 @@ export async function adminUserRoutes(app: FastifyInstance) {
       }
       return reply.code(500).send({ error: "Internal error" });
     }
+  });
+
+  app.get("/api/admin/topups", async (req, reply) => {
+    try { requireAdmin(req); } catch (e: any) {
+      return reply.code(e.statusCode ?? 500).send({ error: e.message });
+    }
+
+    const querySchema = z.object({
+      name: z.string().optional(),
+      from: paymentDateSchema.optional(),
+      to: paymentDateSchema.optional(),
+      method: paymentMethodSchema.optional(),
+    });
+
+    const parsed = querySchema.safeParse(req.query);
+    if (!parsed.success) return reply.code(400).send({ error: "Invalid query" });
+
+    const where: string[] = ["at.reason = 'topup'", "at.delta_cents > 0", "u.deleted_at IS NULL"];
+    const args: Array<string> = [];
+    const name = parsed.data.name?.trim();
+
+    if (name) {
+      where.push("LOWER(u.name) LIKE ?");
+      args.push(`%${name.toLowerCase()}%`);
+    }
+    if (parsed.data.from) {
+      where.push("COALESCE(at.payment_date, date(at.created_at)) >= ?");
+      args.push(parsed.data.from);
+    }
+    if (parsed.data.to) {
+      where.push("COALESCE(at.payment_date, date(at.created_at)) <= ?");
+      args.push(parsed.data.to);
+    }
+    if (parsed.data.method) {
+      where.push("at.payment_method = ?");
+      args.push(parsed.data.method);
+    }
+
+    const db = getDB();
+    const rows = db.prepare(`
+      SELECT
+        at.id,
+        at.user_id,
+        u.name AS user_name,
+        u.email AS user_email,
+        at.delta_cents,
+        at.comment,
+        at.payment_date,
+        at.payment_method,
+        at.created_at
+      FROM account_transactions at
+      JOIN users u ON u.id = at.user_id
+      WHERE ${where.join(" AND ")}
+      ORDER BY COALESCE(at.payment_date, date(at.created_at)) DESC, at.created_at DESC
+    `).all(...args) as Array<{
+      id: string;
+      user_id: number;
+      user_name: string;
+      user_email: string | null;
+      delta_cents: number;
+      comment: string;
+      payment_date: string | null;
+      payment_method: "bank_transfer" | "cash" | null;
+      created_at: string;
+    }>;
+
+    return reply.send({
+      topups: rows.map((row) => ({
+        ...row,
+        delta_cents: Number(row.delta_cents ?? 0),
+      })),
+    });
   });
 
   async function handleDeleteUser(req: any, reply: any) {

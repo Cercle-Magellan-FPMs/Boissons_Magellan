@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 
-type User = { id: number; name: string; is_active: number; balance_cents: number };
+type User = { id: number; name: string; email: string | null; is_active: number; balance_cents: number };
 type Product = { id: number; name: string; price_cents: number | null; qty: number; available: boolean; image_slug?: string | null };
 type Cart = Record<number, number>;
 type DebtItem = { product_id: number; product_name: string; qty: number };
@@ -251,6 +251,25 @@ export default function App() {
     }, 3000);
   }
 
+  async function requestAccountDetail() {
+    if (!user) return;
+    setStatus("Envoi de votre détail par email...");
+
+    const res = await fetch("/api/kiosk/account-detail/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: user.id }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      setStatus(err.error || `Erreur (${res.status})`);
+      return;
+    }
+
+    setStatus(`Détail envoyé à ${user.email ?? "votre adresse email"}.`);
+  }
+
   return (
     <div className="kiosk-root">
       <main className="kiosk-app">
@@ -300,6 +319,9 @@ export default function App() {
                   }}
                 >
                   Mon compte
+                </button>
+                <button className="ghost-button" onClick={requestAccountDetail}>
+                  Demander mon détail
                 </button>
                 <button
                   className="ghost-button"

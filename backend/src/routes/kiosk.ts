@@ -2,6 +2,11 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { getDB } from "../db/db.js";
 import { badgeMatchCandidates, normalizeBadgeUid } from "../lib/badgeUid.js";
+import { sendMail } from "../lib/mailer.js";
+
+function eurosFromCents(cents: number) {
+  return `${(cents / 100).toFixed(2)} EUR`;
+}
 
 export async function kioskRoutes(app: FastifyInstance) {
   app.post("/api/kiosk/identify", async (req, reply) => {
@@ -225,5 +230,124 @@ export async function kioskRoutes(app: FastifyInstance) {
       total_cents,
       items,
     });
+  });
+
+  app.post("/api/kiosk/account-detail/request", async (req, reply) => {
+    const body = z.object({
+      user_id: z.number().int().positive(),
+    }).safeParse(req.body);
+
+    if (!body.success) {
+      return reply.code(400).send({ error: "Invalid payload" });
+    }
+
+    const db = getDB();
+    const user = db.prepare(`
+      SELECT id, name, email, is_active, balance_cents
+      FROM users
+      WHERE id = ?
+        AND deleted_at IS NULL
+    `).get(body.data.user_id) as {
+      id: number;
+      name: string;
+      email: string | null;
+      is_active: number;
+      balance_cents: number;
+    } | undefined;
+
+    if (!user) {
+      return reply.code(404).send({ error: "User not found" });
+    }
+    if (user.is_active !== 1) {
+      return reply.code(403).send({ error: "User disabled" });
+    }
+    if (!user.email) {
+      return reply.code(409).send({ error: "Aucun email n'est enregistré pour ce compte." });
+    }
+
+    const topups = db.prepare(`
+      SELECT
+        delta_cents,
+        comment,
+        COALESCE(payment_date, date(created_at)) AS payment_date,
+        payment_method,
+        created_at
+      FROM account_transactions
+      WHERE user_id = ?
+        AND reason = 'topup'
+        AND delta_cents > 0
+      ORDER BY COALESCE(payment_date, date(created_at)) DESC, created_at DESC
+    `).all(user.id) as Array<{
+      delta_cents: number;
+      comment: string | null;
+      payment_date: string;
+      payment_method: "bank_transfer" | "cash" | null;
+      created_at: string;
+    }>;
+
+    const consumptions = db.prepare(`
+      SELECT
+        o.id AS order_id,
+        o.ts,
+        o.total_cents,
+        GROUP_CONCAT(p.name || ' x' || oi.qty, ', ') AS lines
+      FROM orders o
+      JOIN order_items oi ON oi.order_id = o.id
+      JOIN products p ON p.id = oi.product_id
+      WHERE o.user_id = ?
+        AND o.status = 'committed'
+      GROUP BY o.id, o.ts, o.total_cents
+      ORDER BY o.ts DESC
+    `).all(user.id) as Array<{
+      order_id: string;
+      ts: string;
+      total_cents: number;
+      lines: string | null;
+    }>;
+
+    const topupLines = topups.length === 0
+      ? ["- Aucun top-up enregistré"]
+      : topups.map((topup) => {
+        const methodLabel = topup.payment_method === "cash" ? "liquide" : "virement";
+        return `- ${topup.payment_date} | ${eurosFromCents(Number(topup.delta_cents ?? 0))} | ${methodLabel} | ${topup.comment ?? ""}`.trim();
+      });
+
+    const consumptionLines = consumptions.length === 0
+      ? ["- Aucune consommation enregistrée"]
+      : consumptions.map((order) =>
+        `- ${order.ts} | ${eurosFromCents(Number(order.total_cents ?? 0))} | ${order.lines ?? ""}`
+      );
+
+    const text = [
+      `Bonjour ${user.name},`,
+      "",
+      "Voici le détail de votre compte Boissons Magellan.",
+      "",
+      `Solde actuel: ${eurosFromCents(Number(user.balance_cents ?? 0))}`,
+      "",
+      "Top-ups:",
+      ...topupLines,
+      "",
+      "Consommations:",
+      ...consumptionLines,
+      "",
+      "Cet email a été généré automatiquement.",
+    ].join("\n");
+
+    try {
+      await sendMail({
+        to: user.email,
+        subject: "Boissons Magellan - Détail de votre compte",
+        text,
+      });
+      return reply.send({ ok: true });
+    } catch (error: unknown) {
+      const message = String((error as Error)?.message ?? error);
+      if (message.includes("MAIL_NOT_CONFIGURED")) {
+        return reply.code(500).send({ error: "Envoi email indisponible: configuration SMTP manquante." });
+      }
+      req.log.error({ error }, "account detail email failed");
+      return reply.code(500).send({ error: "Impossible d'envoyer l'email pour le moment." });
+    }
   });
 }

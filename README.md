@@ -8,6 +8,8 @@ The repository is split into 3 main applications:
 - `kiosk`: React/Vite frontend used on the physical kiosk
 - `admin`: React/Vite frontend for committee/admin operations
 
+Mandatory Codex working rules are defined in `CODEX_RULES.md`.
+
 An Ubuntu host deployment path based on `systemd` and host `nginx` is included for production use.
 
 ## What The Project Does
@@ -20,6 +22,8 @@ Main workflow:
 4. The user places an order.
 5. The backend stores the order, debits the user's prepaid balance, decrements stock, and records stock/account movements.
 6. Admins can review debts, close billing periods, mark debts as paid, restock products, top up balances, and manage users/products.
+7. User signup in admin requires an email.
+8. Top-ups require a mandatory comment and payment metadata (payment date + payment method) for positive recharges.
 
 Business concepts implemented in the codebase:
 
@@ -133,7 +137,13 @@ Registered route groups:
   - Creates an order for a user
   - Validates user status, product price, and available prepaid balance
   - Rejects the order if the user balance would go below `0`
+  - Insufficient balance message returned by API:
+    - `Solde insuffisant, merci de faire un virement au compte suivant : BE70 7512 1182 7125`
   - Decrements stock, debits the user balance, and writes stock/account movement rows
+
+- `POST /api/kiosk/account-detail/request`
+  - Sends account detail by email for the identified user
+  - Email contains all top-ups and all consumptions
 
 ### Admin API
 
@@ -175,14 +185,21 @@ Users:
 
 - `GET /api/admin/users`
 - `POST /api/admin/users`
+  - Email is required
 - `PATCH /api/admin/users/:id`
 - `POST /api/admin/users/:id/badge`
 - `DELETE /api/admin/users/:id/badge`
 - `POST /api/admin/users/:id/topup`
+  - `comment` is mandatory
+  - For positive top-ups, `payment_date` (`YYYY-MM-DD`) and `payment_method` (`bank_transfer` or `cash`) are mandatory
 - `DELETE /api/admin/users/:id`
   - Soft-deletes a user from the admin list while preserving history
 - `POST /api/admin/users/:id/delete`
   - Alias used by the admin UI for user soft-delete in environments where `DELETE` is inconvenient
+
+- `GET /api/admin/topups`
+  - Returns top-up log entries (used by admin top-up log page)
+  - Query filters: `name`, `from`, `to`, `method`
 
 ## Frontend Structure
 
@@ -224,7 +241,7 @@ Purpose:
 - Manage users, multiple RFID badges, and prepaid balances
 - Close periods
 - Review and mark debts as paid
-- Display debt summary by user
+- Review top-up logs
 
 Main files:
 
@@ -234,7 +251,7 @@ Main files:
 - `admin/src/pages/ProductsPage.tsx`: product listing, creation, rename, price updates, activation, image slug
 - `admin/src/pages/RestockPage.tsx`: stock input form and correction/restock submission
 - `admin/src/pages/DebtsPage.tsx`: close period and manage debt payment state
-- `admin/src/pages/DebtSummaryPage.tsx`: debt overview by user with detail panel
+- `admin/src/pages/TopupsLogPage.tsx`: top-up log with date/method/user filters
 - `admin/src/pages/UsersPage.tsx`: user creation, activation, rename, multi-badge management, balance top-up, and user removal
 
 ## Database Structure
@@ -247,12 +264,14 @@ Migrations are stored in `backend/src/db/migrations/`:
 - `002_billing_periods.sql`
 - `003_accounts_badges_soft_delete.sql`
 - `004_prepaid_orders.sql`
+- `005_topup_payment_metadata.sql`
 
 Core tables:
 
 - `users`: users and RFID mapping
 - `user_badges`: multiple badge IDs per user
 - `account_transactions`: prepaid balance ledger
+  - includes `payment_date` and `payment_method` metadata for top-ups
 - `products`: drink catalog
 - `product_prices`: price history per product
 - `stock_current`: current stock per product
@@ -319,6 +338,7 @@ Legacy / secondary tables still present:
 │   │   └── boissons-backup.sh
 │   └── vm/
 │       └── deploy-host.sh
+├── CODEX_RULES.md
 └── README.md
 ```
 
@@ -344,6 +364,12 @@ Relevant backend environment variables:
 - `DB_PATH`
 - `ADMIN_TOKEN`
 - `PRODUCT_SLUG_PATH`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_SECURE`
+- `SMTP_USER`
+- `SMTP_PASS`
+- `SMTP_FROM`
 
 ### Required migration step
 
@@ -353,6 +379,7 @@ If the project is already deployed, you must run backend migrations before start
 - multiple user badge IDs
 - prepaid user balances
 - prepaid order tracking
+- top-up payment metadata (`payment_date`, `payment_method`)
 
 ### Frontends
 

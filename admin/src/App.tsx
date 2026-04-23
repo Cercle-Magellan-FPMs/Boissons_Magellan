@@ -4,10 +4,10 @@ import { getAdminToken, setAdminToken } from "./lib/api";
 import ProductsPage from "./pages/ProductsPage";
 import RestockPage from "./pages/RestockPage";
 import DebtsPage from "./pages/DebtsPage";
-import DebtSummaryPage from "./pages/DebtSummaryPage";
+import TopupsLogPage from "./pages/TopupsLogPage";
 import UsersPage from "./pages/UsersPage";
 
-type Page = "products" | "restock" | "debts" | "summary" | "users";
+type Page = "products" | "restock" | "debts" | "topups" | "users";
 
 export default function App() {
   const [page, setPage] = useState<Page>("products");
@@ -46,10 +46,10 @@ export default function App() {
               Clôturer
             </button>
             <button
-              className={`nav-button ${page === "summary" ? "active" : ""}`}
-              onClick={() => setPage("summary")}
+              className={`nav-button ${page === "topups" ? "active" : ""}`}
+              onClick={() => setPage("topups")}
             >
-              Résumé des dettes
+              Log des top-ups
             </button>
             <button
               className={`nav-button ${page === "users" ? "active" : ""}`}
@@ -64,7 +64,7 @@ export default function App() {
           {page === "products" && <ProductsPage />}
           {page === "restock" && <RestockPage />}
           {page === "debts" && <DebtsPage />}
-          {page === "summary" && <DebtSummaryPage />}
+          {page === "topups" && <TopupsLogPage />}
           {page === "users" && <UsersPage />}
         </main>
       </div>
