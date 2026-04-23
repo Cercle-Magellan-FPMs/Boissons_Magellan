@@ -131,6 +131,8 @@ export async function adminClosePeriodRoutes(app: FastifyInstance) {
         "",
         "Votre extrait de compte sur la période clôturée est disponible ci-dessous.",
         "",
+        parsed.data.comment?.trim() ? parsed.data.comment.trim() : "[Aucun commentaire de clôture]",
+        "",
         `Période: ${start_ts} -> ${end}`,
         `Total consommations: ${eurosFromCents(Number(lines.reduce((acc, line) => acc + Number(line.amount_cents ?? 0), 0)))}`,
         `Montant à facturer période clôturée: ${eurosFromCents(userDebtCents)}`,
