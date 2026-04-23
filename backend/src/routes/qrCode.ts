@@ -57,7 +57,10 @@ function loadQrSettings(): QrSettings {
 
 function buildEpcPayload(settings: QrSettings, amountCents: number, uniqueId: string) {
   const amount = `EUR${eurosAmountFromCents(amountCents)}`;
-  const remittance = `${settings.remittance_prefix}${uniqueId}`;
+  const prefix = settings.remittance_prefix;
+  const remittance = prefix.endsWith(" ")
+    ? `${prefix}${uniqueId}`
+    : `${prefix} ${uniqueId}`;
 
   return [
     "BCD",
@@ -72,6 +75,12 @@ function buildEpcPayload(settings: QrSettings, amountCents: number, uniqueId: st
     remittance,
     "",
   ].join("\n");
+}
+
+function buildRemittance(prefix: string, uniqueId: string) {
+  return prefix.endsWith(" ")
+    ? `${prefix}${uniqueId}`
+    : `${prefix} ${uniqueId}`;
 }
 
 function generateUniqueId() {
@@ -152,6 +161,7 @@ export async function qrCodeRoutes(app: FastifyInstance) {
     const settings = loadQrSettings();
     const uniqueId = generateUniqueId();
     const epcPayload = buildEpcPayload(settings, amountCents, uniqueId);
+    const remittance = buildRemittance(settings.remittance_prefix, uniqueId);
 
     let qrCodeDataUrl: string;
     try {
@@ -180,7 +190,7 @@ export async function qrCodeRoutes(app: FastifyInstance) {
       recipient_name: settings.recipient_name,
       iban: settings.iban,
       bic: settings.bic,
-      remittance: `${settings.remittance_prefix}${uniqueId}`,
+      remittance,
       epc_payload: epcPayload,
       qr_code_data_url: qrCodeDataUrl,
       intent_token: intentToken,
@@ -353,7 +363,7 @@ export async function qrCodeRoutes(app: FastifyInstance) {
       recipient_name: z.string().trim().min(2).max(70),
       iban: z.string().trim().min(8).max(34),
       bic: z.string().trim().min(8).max(11),
-      remittance_prefix: z.string().trim().min(1).max(24),
+      remittance_prefix: z.string().min(1).max(24),
     }).safeParse(req.body);
 
     if (!body.success) return reply.code(400).send({ error: "Invalid payload" });
@@ -364,7 +374,10 @@ export async function qrCodeRoutes(app: FastifyInstance) {
     if (!validateBic(bic)) return reply.code(400).send({ error: "BIC invalide" });
 
     const recipientName = body.data.recipient_name.trim();
-    const remittancePrefix = body.data.remittance_prefix.trim();
+    const remittancePrefix = body.data.remittance_prefix;
+    if (!remittancePrefix.trim()) {
+      return reply.code(400).send({ error: "Texte avant UNIQUE_ID obligatoire" });
+    }
 
     const db = getDB();
     db.prepare(`
