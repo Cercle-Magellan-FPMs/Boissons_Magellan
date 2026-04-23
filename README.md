@@ -209,6 +209,8 @@ Closing operations:
 
 - `POST /api/admin/close-period`
   - Closes everything since the last billing period and creates `period_debts`
+  - Sends each concerned user an email with consumption details for the closed period
+  - Response includes mail delivery summary (`mail.sent`, `mail.skipped`, `mail.failed`)
 
 - `POST /api/admin/close-month`
   - Older monthly closing logic based on `monthly_debts`

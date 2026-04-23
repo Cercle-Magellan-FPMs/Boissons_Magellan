@@ -3,6 +3,11 @@ import { z } from "zod";
 import { randomUUID } from "crypto";
 import { getDB } from "../../db/db.js";
 import { requireAdmin } from "./_auth.js";
+import { sendMail } from "../../lib/mailer.js";
+
+function eurosFromCents(cents: number) {
+  return `${(cents / 100).toFixed(2)} EUR`;
+}
 
 export async function adminClosePeriodRoutes(app: FastifyInstance) {
   app.post("/api/admin/close-period", async (req, reply) => {
@@ -62,6 +67,81 @@ export async function adminClosePeriodRoutes(app: FastifyInstance) {
 
     const created = tx();
 
-    return reply.send({ ok: true, period_id, start_ts, end_ts: end, created });
+    const mailStats = {
+      sent: 0,
+      skipped: 0,
+      failed: 0,
+      errors: [] as Array<{ user_id: number; error: string }>,
+    };
+
+    for (const summary of sums) {
+      const user = db.prepare(`
+        SELECT id, name, email
+        FROM users
+        WHERE id = ?
+      `).get(summary.user_id) as { id: number; name: string; email: string | null } | undefined;
+
+      if (!user?.email) {
+        mailStats.skipped += 1;
+        continue;
+      }
+
+      const lines = db.prepare(`
+        SELECT
+          p.name AS product_name,
+          SUM(oi.qty) AS qty,
+          SUM(oi.qty * oi.unit_price_cents) AS amount_cents
+        FROM orders o
+        JOIN order_items oi ON oi.order_id = o.id
+        JOIN products p ON p.id = oi.product_id
+        WHERE o.user_id = ?
+          AND o.status = 'committed'
+          AND COALESCE(o.paid_from_balance, 0) = 0
+          AND o.ts >= ?
+          AND o.ts < ?
+        GROUP BY p.name
+        ORDER BY p.name ASC
+      `).all(summary.user_id, start_ts, end) as Array<{
+        product_name: string;
+        qty: number;
+        amount_cents: number;
+      }>;
+
+      const detail = lines.length === 0
+        ? ["- Aucune consommation trouvée sur la période."]
+        : lines.map((line) =>
+          `- ${line.product_name}: ${Number(line.qty)} ( ${eurosFromCents(Number(line.amount_cents ?? 0))} )`
+        );
+
+      const body = [
+        `Bonjour ${user.name},`,
+        "",
+        "Votre consommation sur la période clôturée est disponible ci-dessous.",
+        "",
+        `Période: ${start_ts} -> ${end}`,
+        `Total période: ${eurosFromCents(Number(summary.amount_cents ?? 0))}`,
+        "",
+        "Détail:",
+        ...detail,
+        "",
+        "Ceci est un email automatique Boissons Magellan.",
+      ].join("\n");
+
+      try {
+        await sendMail({
+          to: user.email,
+          subject: "Boissons Magellan - Consommation période clôturée",
+          text: body,
+        });
+        mailStats.sent += 1;
+      } catch (error: unknown) {
+        const message = String((error as Error)?.message ?? error);
+        mailStats.failed += 1;
+        mailStats.errors.push({ user_id: summary.user_id, error: message });
+        req.log.error({ user_id: summary.user_id, error }, "close period mail failed");
+      }
+    }
+
+    return reply.send({ ok: true, period_id, start_ts, end_ts: end, created, mail: mailStats });
   });
 }
