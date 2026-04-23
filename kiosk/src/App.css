@@ -167,9 +167,11 @@
   width: 60px;
   height: 60px;
   border-radius: 12px;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
   background: rgba(255, 255, 255, 0.04);
   flex: 0 0 auto;
+  padding: 4px;
 }
 
 .tile-info {
