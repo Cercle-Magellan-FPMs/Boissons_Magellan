@@ -97,7 +97,7 @@ Current access restrictions in nginx:
 
 - `/admin/` is only allowed from `172.16.0.111`
 - `/api/admin/` is only allowed from `172.16.0.111`
-- `/api/kiosk/` is allowed from `172.20.0.4`, `172.20.10.0/24`, `172.16.0.111`, and `172.19.0.9`
+- `/api/kiosk/` is allowed from `172.20.0.4`, `172.20.0.10`, `172.16.0.111`, and `172.19.0.9`
 
 ## Backend API
 
