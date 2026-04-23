@@ -169,6 +169,10 @@ Registered route groups:
     - PNG QR code as data URL
     - signed intent token to bind `UNIQUE_ID + user + amount`
   - Does not insert any payment row at this stage
+  - EPC remittance is explicitly forced in unstructured/free mode:
+    - structured field stays empty
+    - free remittance field carries `Boisson...UNIQUE_ID` text
+    - structured-like references (`+++...+++`, `RF...`) are rejected by validation
 
 - `POST /api/kiosk/qr-code/confirm`
   - Called only when user clicks `J'ai payé par QR Code`

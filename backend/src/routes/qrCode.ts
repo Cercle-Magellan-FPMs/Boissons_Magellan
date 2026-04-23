@@ -32,6 +32,23 @@ function validateBic(bic: string) {
   return /^[A-Z0-9]{8}([A-Z0-9]{3})?$/.test(bic);
 }
 
+export function looksLikeBelgianStructuredReference(value: string) {
+  const compact = value.replace(/\s+/g, "");
+  return /^\+{3}\d{3}\/\d{4}\/\d{5}\+{3}$/.test(compact);
+}
+
+export function looksLikeEpcStructuredReference(value: string) {
+  const compact = value.replace(/\s+/g, "").toUpperCase();
+  return /^RF[0-9A-Z]{2,}$/.test(compact);
+}
+
+export function validateUnstructuredRemittance(value: string) {
+  if (!value.trim()) return false;
+  if (looksLikeBelgianStructuredReference(value)) return false;
+  if (looksLikeEpcStructuredReference(value)) return false;
+  return true;
+}
+
 function loadQrSettings(): QrSettings {
   const db = getDB();
   const row = db.prepare(`
@@ -55,13 +72,16 @@ function loadQrSettings(): QrSettings {
   };
 }
 
-function buildEpcPayload(settings: QrSettings, amountCents: number, uniqueId: string) {
+export function buildEpcPayload(settings: QrSettings, amountCents: number, uniqueId: string) {
   const amount = `EUR${eurosAmountFromCents(amountCents)}`;
-  const prefix = settings.remittance_prefix;
-  const remittance = prefix.endsWith(" ")
-    ? `${prefix}${uniqueId}`
-    : `${prefix} ${uniqueId}`;
+  const remittance = buildRemittance(settings.remittance_prefix, uniqueId);
+  if (!validateUnstructuredRemittance(remittance)) {
+    throw new Error("INVALID_REMITTANCE_FORMAT");
+  }
 
+  // EPC v2 order:
+  // 9 purpose, 10 structured remittance, 11 unstructured remittance, 12 beneficiary info.
+  // We force field 10 empty and put our reference in field 11 so it is always free/unstructured.
   return [
     "BCD",
     "002",
@@ -72,15 +92,18 @@ function buildEpcPayload(settings: QrSettings, amountCents: number, uniqueId: st
     settings.iban,
     amount,
     "",
+    "",
     remittance,
     "",
   ].join("\n");
 }
 
-function buildRemittance(prefix: string, uniqueId: string) {
-  return prefix.endsWith(" ")
-    ? `${prefix}${uniqueId}`
-    : `${prefix} ${uniqueId}`;
+export function buildRemittance(prefix: string, uniqueId: string) {
+  const cleanPrefix = prefix || "Boisson";
+  const prefixed = cleanPrefix.endsWith(" ")
+    ? `${cleanPrefix}${uniqueId}`
+    : `${cleanPrefix} ${uniqueId}`;
+  return prefixed.trim();
 }
 
 function generateUniqueId() {
@@ -160,8 +183,21 @@ export async function qrCodeRoutes(app: FastifyInstance) {
 
     const settings = loadQrSettings();
     const uniqueId = generateUniqueId();
-    const epcPayload = buildEpcPayload(settings, amountCents, uniqueId);
     const remittance = buildRemittance(settings.remittance_prefix, uniqueId);
+    if (!validateUnstructuredRemittance(remittance)) {
+      return reply.code(500).send({ error: "Format de remittance invalide" });
+    }
+
+    let epcPayload: string;
+    try {
+      epcPayload = buildEpcPayload(settings, amountCents, uniqueId);
+    } catch (error: unknown) {
+      const msg = String((error as Error)?.message ?? error);
+      if (msg.includes("INVALID_REMITTANCE_FORMAT")) {
+        return reply.code(500).send({ error: "Format de remittance invalide" });
+      }
+      throw error;
+    }
 
     let qrCodeDataUrl: string;
     try {
@@ -377,6 +413,12 @@ export async function qrCodeRoutes(app: FastifyInstance) {
     const remittancePrefix = body.data.remittance_prefix;
     if (!remittancePrefix.trim()) {
       return reply.code(400).send({ error: "Texte avant UNIQUE_ID obligatoire" });
+    }
+    const sampleRemittance = buildRemittance(remittancePrefix, "A1B2C3D4E5F6");
+    if (!validateUnstructuredRemittance(sampleRemittance)) {
+      return reply.code(400).send({
+        error: "Le texte avant UNIQUE_ID produit une communication structurée. Utilisez un texte libre (ex: Boisson).",
+      });
     }
 
     const db = getDB();
