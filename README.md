@@ -92,7 +92,8 @@ Installed by `ops/vm/deploy-host.sh` into the host nginx configuration:
 
 - `/` -> redirects to `/kiosk/`
 - `/kiosk/` -> kiosk frontend
-- `/admin/` -> admin frontend, IP-restricted
+- `/admin/` -> redirects to `/admin/products`
+- `/admin/products` -> admin frontend (SPA entry), IP-restricted
 - `/api/kiosk/` -> kiosk API, IP-restricted
 - `/api/admin/` -> admin API, IP-restricted
 

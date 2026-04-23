@@ -99,7 +99,11 @@ server {
   }
 
   location = /admin {
-    return 302 /admin/;
+    return 302 /admin/products;
+  }
+
+  location = /admin/ {
+    return 302 /admin/products;
   }
 
   location /admin/ {
