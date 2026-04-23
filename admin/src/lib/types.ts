@@ -14,6 +14,7 @@ export type AdminUser = {
   rfid_uid: string | null;
   badge_uids: string[];
   is_active: number;
+  local_access: number;
   created_at: string;
   balance_cents: number;
 };

@@ -149,6 +149,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
         u.email,
         u.rfid_uid,
         u.is_active,
+        u.local_access,
         u.created_at,
         u.balance_cents,
         COALESCE((
@@ -169,6 +170,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
       users: users.map((user: any) => ({
         ...user,
         balance_cents: Number(user.balance_cents ?? 0),
+        local_access: Number(user.local_access ?? 0),
         badge_uids: String(user.badge_uids || "")
           .split("\n")
           .map((value) => value.trim())
@@ -189,6 +191,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
         u.name,
         u.email,
         u.is_active,
+        u.local_access,
         u.balance_cents,
         u.rfid_uid,
         u.created_at,
@@ -210,6 +213,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
       name: string;
       email: string | null;
       is_active: number;
+      local_access: number;
       balance_cents: number;
       rfid_uid: string | null;
       created_at: string;
@@ -222,6 +226,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
       "name",
       "email",
       "is_active",
+      "local_access",
       "balance_cents",
       "rfid_uid",
       "badge_uids",
@@ -236,6 +241,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
         csvEscape(row.name ?? ""),
         csvEscape(row.email ?? ""),
         String(Number(row.is_active ?? 0)),
+        String(Number(row.local_access ?? 0)),
         String(Number(row.balance_cents ?? 0)),
         csvEscape(row.rfid_uid ?? ""),
         csvEscape(row.badge_uids ?? ""),
@@ -286,6 +292,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
       name: string;
       email: string;
       is_active: number;
+      local_access: number;
       balance_cents: number;
       rfid_uid: string | null;
       badge_uids: string[];
@@ -303,12 +310,13 @@ export async function adminUserRoutes(app: FastifyInstance) {
         if (existing) {
           db.prepare(`
             UPDATE users
-            SET name = ?, email = ?, is_active = ?, balance_cents = ?, rfid_uid = ?, deleted_at = NULL
+            SET name = ?, email = ?, is_active = ?, local_access = ?, balance_cents = ?, rfid_uid = ?, deleted_at = NULL
             WHERE id = ?
           `).run(
             record.name,
             record.email,
             record.is_active,
+            record.local_access,
             record.balance_cents,
             record.rfid_uid,
             existing.id
@@ -317,14 +325,15 @@ export async function adminUserRoutes(app: FastifyInstance) {
           mode = "updated";
         } else {
           const inserted = db.prepare(`
-            INSERT INTO users (id, name, email, rfid_uid, is_active, balance_cents)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO users (id, name, email, rfid_uid, is_active, local_access, balance_cents)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
           `).run(
             record.id,
             record.name,
             record.email,
             record.rfid_uid,
             record.is_active,
+            record.local_access,
             record.balance_cents
           );
           userId = Number(inserted.lastInsertRowid);
@@ -332,13 +341,14 @@ export async function adminUserRoutes(app: FastifyInstance) {
         }
       } else {
         const inserted = db.prepare(`
-          INSERT INTO users (name, email, rfid_uid, is_active, balance_cents)
-          VALUES (?, ?, ?, ?, ?)
+          INSERT INTO users (name, email, rfid_uid, is_active, local_access, balance_cents)
+          VALUES (?, ?, ?, ?, ?, ?)
         `).run(
           record.name,
           record.email,
           record.rfid_uid,
           record.is_active,
+          record.local_access,
           record.balance_cents
         );
         userId = Number(inserted.lastInsertRowid);
@@ -386,6 +396,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
         }
 
         const is_active = parseBooleanFlag(record.is_active, 1);
+        const local_access = parseBooleanFlag(record.local_access, 0);
 
         const balance_cents = record.balance_cents ? Number(record.balance_cents) : 0;
         if (!Number.isFinite(balance_cents) || !Number.isInteger(balance_cents)) {
@@ -408,6 +419,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
           name,
           email,
           is_active,
+          local_access,
           balance_cents,
           rfid_uid: normalizedRfid,
           badge_uids,
@@ -441,6 +453,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
       name: z.string().min(1),
       email: z.string().email(),
       is_active: z.boolean().optional().default(true),
+      local_access: z.boolean().optional().default(false),
       rfid_uid: z.string().optional().or(z.literal("")).optional(), // optionnel
     });
 
@@ -450,6 +463,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
     const name = parsed.data.name.trim();
     const email = parsed.data.email.trim();
     const is_active = parsed.data.is_active ? 1 : 0;
+    const local_access = parsed.data.local_access ? 1 : 0;
     const rfid_uid = parsed.data.rfid_uid ? normUid(parsed.data.rfid_uid) : null;
 
     const db = getDB();
@@ -457,9 +471,9 @@ export async function adminUserRoutes(app: FastifyInstance) {
     try {
       const tx = db.transaction(() => {
         const result = db.prepare(`
-          INSERT INTO users (name, email, rfid_uid, is_active, balance_cents)
-          VALUES (?, ?, ?, ?, 0)
-        `).run(name, email, rfid_uid, is_active);
+          INSERT INTO users (name, email, rfid_uid, is_active, local_access, balance_cents)
+          VALUES (?, ?, ?, ?, ?, 0)
+        `).run(name, email, rfid_uid, is_active, local_access);
 
         const userId = Number(result.lastInsertRowid);
 
@@ -496,6 +510,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
       name: z.string().min(1).optional(),
       email: z.string().email().optional(),
       is_active: z.boolean().optional(),
+      local_access: z.boolean().optional(),
     });
 
     const p = paramsSchema.safeParse(req.params);
@@ -514,6 +529,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
     if (b.data.name !== undefined) { updates.push("name=?"); args.push(b.data.name.trim()); }
     if (b.data.email !== undefined) { updates.push("email=?"); args.push(b.data.email.trim()); }
     if (b.data.is_active !== undefined) { updates.push("is_active=?"); args.push(b.data.is_active ? 1 : 0); }
+    if (b.data.local_access !== undefined) { updates.push("local_access=?"); args.push(b.data.local_access ? 1 : 0); }
 
     if (updates.length === 0) return reply.send({ ok: true });
 

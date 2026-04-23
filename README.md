@@ -209,7 +209,7 @@ Users:
 - `POST /api/admin/users`
   - Email is required
 - `PATCH /api/admin/users/:id`
-  - Updates user name, email, and active status
+  - Updates user name, email, active status, and `local_access`
 - `POST /api/admin/users/:id/badge`
 - `DELETE /api/admin/users/:id/badge`
 - `POST /api/admin/users/:id/topup`
@@ -217,7 +217,7 @@ Users:
   - For positive top-ups, `payment_date` (`YYYY-MM-DD`) and `payment_method` (`bank_transfer` or `cash`) are mandatory
 - `GET /api/admin/users/export.csv`
   - Exports current users list as CSV
-  - Includes: `id,name,email,is_active,balance_cents,rfid_uid,badge_uids,created_at,deleted_at`
+  - Includes: `id,name,email,is_active,local_access,balance_cents,rfid_uid,badge_uids,created_at,deleted_at`
 - `POST /api/admin/users/import`
   - Imports users from CSV payload `{ csv: string }`
   - Upserts by `id` when present, creates otherwise
@@ -306,7 +306,7 @@ Main files:
 - `admin/src/pages/RestockPage.tsx`: stock input form and correction/restock submission
 - `admin/src/pages/DebtsPage.tsx`: close period and manage debt payment state
 - `admin/src/pages/TopupsLogPage.tsx`: top-up log with date/method/user filters
-- `admin/src/pages/UsersPage.tsx`: user creation, email editing, activation, rename, multi-badge management, balance top-up, CSV import/export, and user removal
+- `admin/src/pages/UsersPage.tsx`: user creation, email editing, activation, local-access toggle/listing, rename, multi-badge management, balance top-up, CSV import/export, and user removal
 - `admin/src/pages/EmailSettingsPage.tsx`: SMTP sender-account setup and test email
 
 ## Database Structure
@@ -321,10 +321,12 @@ Migrations are stored in `backend/src/db/migrations/`:
 - `004_prepaid_orders.sql`
 - `005_topup_payment_metadata.sql`
 - `006_badge_requests.sql`
+- `007_users_local_access.sql`
 
 Core tables:
 
 - `users`: users and RFID mapping
+  - includes `local_access` (binary flag for physical room access listing)
 - `user_badges`: multiple badge IDs per user
 - `badge_requests`: kiosk-created badge/account requests awaiting admin approval
 - `account_transactions`: prepaid balance ledger
@@ -439,6 +441,7 @@ If the project is already deployed, you must run backend migrations before start
 - prepaid user balances
 - prepaid order tracking
 - top-up payment metadata (`payment_date`, `payment_method`)
+- user local-access flag (`users.local_access`)
 
 ### Frontends
 

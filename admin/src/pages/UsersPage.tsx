@@ -23,6 +23,7 @@ export default function UsersPage() {
   const [email, setEmail] = useState("");
   const [rfid, setRfid] = useState("");
   const [active, setActive] = useState(true);
+  const [localAccess, setLocalAccess] = useState(false);
 
   const [badgeModalUser, setBadgeModalUser] = useState<AdminUser | null>(null);
   const [badgeInput, setBadgeInput] = useState("");
@@ -82,12 +83,14 @@ export default function UsersPage() {
           email: email.trim(),
           rfid_uid: rfid.trim() || undefined,
           is_active: active,
+          local_access: localAccess,
         }),
       });
       setName("");
       setEmail("");
       setRfid("");
       setActive(true);
+      setLocalAccess(false);
       await load();
     } catch (e: any) {
       alert(e.message);
@@ -99,6 +102,18 @@ export default function UsersPage() {
       await api(`/api/admin/users/${u.id}`, {
         method: "PATCH",
         body: JSON.stringify({ is_active: u.is_active !== 1 }),
+      });
+      await load();
+    } catch (e: any) {
+      alert(e.message);
+    }
+  }
+
+  async function toggleLocalAccess(u: AdminUser) {
+    try {
+      await api(`/api/admin/users/${u.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ local_access: u.local_access !== 1 }),
       });
       await load();
     } catch (e: any) {
@@ -338,6 +353,9 @@ export default function UsersPage() {
   const filteredUsers = users.filter((u) =>
     u.name.toLowerCase().includes(nameFilter.trim().toLowerCase())
   );
+  const localAccessUsers = users
+    .filter((u) => u.local_access === 1)
+    .sort((a, b) => a.name.localeCompare(b.name, "fr"));
 
   return (
     <section style={{ display: "grid", gap: 12 }}>
@@ -352,6 +370,10 @@ export default function UsersPage() {
           <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
             Actif
+          </label>
+          <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <input type="checkbox" checked={localAccess} onChange={(e) => setLocalAccess(e.target.checked)} />
+            Accès au local
           </label>
           <button onClick={addUser} style={{ fontWeight: 900 }}>Ajouter</button>
         </div>
@@ -405,6 +427,33 @@ export default function UsersPage() {
             </div>
           ))}
           {badgeRequests.length === 0 && <p style={{ opacity: 0.7 }}>Aucune demande en attente.</p>}
+        </div>
+      </div>
+
+      <div style={{ padding: 12, border: "1px solid #333", borderRadius: 12 }}>
+        <h3 style={{ marginTop: 0 }}>Listing accès au local</h3>
+        <div style={{ display: "grid", gap: 6 }}>
+          {localAccessUsers.map((u) => (
+            <div
+              key={`local-${u.id}`}
+              style={{
+                border: "1px solid #444",
+                borderRadius: 8,
+                padding: "8px 10px",
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 10,
+                alignItems: "center",
+              }}
+            >
+              <div>
+                <strong>{u.name}</strong>
+                <span style={{ opacity: 0.7 }}> ({u.email || "--"})</span>
+              </div>
+              <div style={{ opacity: 0.7 }}>ID: {u.id}</div>
+            </div>
+          ))}
+          {localAccessUsers.length === 0 && <p style={{ opacity: 0.7 }}>Aucun utilisateur avec accès au local.</p>}
         </div>
       </div>
 
@@ -480,6 +529,9 @@ export default function UsersPage() {
               <div>
                 <div style={{ fontWeight: 900 }}>{eurosFromCents(u.balance_cents)}</div>
                 <div style={{ opacity: 0.7 }}>Solde disponible</div>
+                <div style={{ opacity: 0.7 }}>
+                  Accès local: <b>{u.local_access === 1 ? "Oui" : "Non"}</b>
+                </div>
               </div>
 
               <div style={{ opacity: 0.85 }}>
@@ -493,6 +545,9 @@ export default function UsersPage() {
                   {u.badge_uids.length > 0 ? "Gerer badges" : "Lier badge"}
                 </button>
                 <button onClick={() => openTopUpModal(u)}>Recharger</button>
+                <button onClick={() => toggleLocalAccess(u)}>
+                  {u.local_access === 1 ? "Retirer accès local" : "Donner accès local"}
+                </button>
                 <button onClick={() => toggleActive(u)}>{u.is_active === 1 ? "Desactiver" : "Activer"}</button>
                 <button onClick={() => removeUser(u)}>Supprimer</button>
               </div>
