@@ -138,6 +138,25 @@ export default function UsersPage() {
     }
   }
 
+  async function updateEmail(u: AdminUser, nextEmail: string) {
+    const cleanEmail = nextEmail.trim();
+    if (!cleanEmail) {
+      alert("L'email est obligatoire.");
+      return;
+    }
+    if (cleanEmail === (u.email ?? "")) return;
+
+    try {
+      await api(`/api/admin/users/${u.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ email: cleanEmail }),
+      });
+      await load();
+    } catch (e: any) {
+      alert(e.message);
+    }
+  }
+
   function openTopUpModal(user: AdminUser) {
     setTopUpModalUser(user);
     setTopUpAmount("10");
@@ -260,7 +279,24 @@ export default function UsersPage() {
               <div>
                 <div style={{ fontWeight: 900 }}>{u.name}</div>
                 <div style={{ opacity: 0.7 }}>ID: {u.id}</div>
-                <div style={{ opacity: 0.85 }}>{u.email || "--"}</div>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const formData = new FormData(e.currentTarget);
+                    updateEmail(u, String(formData.get("email") ?? ""));
+                  }}
+                  style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}
+                >
+                  <input
+                    key={`${u.id}-${u.email ?? ""}`}
+                    name="email"
+                    type="email"
+                    defaultValue={u.email ?? ""}
+                    placeholder="Email"
+                    style={{ padding: 7, minWidth: 220 }}
+                  />
+                  <button type="submit">Enregistrer email</button>
+                </form>
               </div>
 
               <div>

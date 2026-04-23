@@ -199,6 +199,7 @@ Users:
 - `POST /api/admin/users`
   - Email is required
 - `PATCH /api/admin/users/:id`
+  - Updates user name, email, and active status
 - `POST /api/admin/users/:id/badge`
 - `DELETE /api/admin/users/:id/badge`
 - `POST /api/admin/users/:id/topup`
@@ -276,7 +277,7 @@ Main files:
 - `admin/src/pages/RestockPage.tsx`: stock input form and correction/restock submission
 - `admin/src/pages/DebtsPage.tsx`: close period and manage debt payment state
 - `admin/src/pages/TopupsLogPage.tsx`: top-up log with date/method/user filters
-- `admin/src/pages/UsersPage.tsx`: user creation, activation, rename, multi-badge management, balance top-up, and user removal
+- `admin/src/pages/UsersPage.tsx`: user creation, email editing, activation, rename, multi-badge management, balance top-up, and user removal
 - `admin/src/pages/EmailSettingsPage.tsx`: SMTP sender-account setup and test email
 
 ## Database Structure
