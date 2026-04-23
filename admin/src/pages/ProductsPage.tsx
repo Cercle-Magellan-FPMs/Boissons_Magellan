@@ -86,7 +86,7 @@ export default function ProductsPage() {
     }
   }
 
-  async function uploadProductImage(p: AdminProduct, file: File | null) {
+  async function uploadProductImage(p: AdminProduct, file: File | null, overwrite = false) {
     if (!file) return;
     if (file.type !== "image/png" && !file.name.toLowerCase().endsWith(".png")) {
       alert("Seuls les fichiers PNG sont autorisés.");
@@ -113,13 +113,29 @@ export default function ProductsPage() {
         body: JSON.stringify({
           upload_name: uploadName,
           image_base64,
+          overwrite,
         }),
       });
 
       setUploadNames((prev) => ({ ...prev, [p.id]: "" }));
       await load();
     } catch (e: any) {
-      alert(e.message);
+      const message = String(e?.message ?? "");
+      const isConflict =
+        message.toLowerCase().includes("existe déjà") ||
+        message.toLowerCase().includes("already exists");
+
+      if (!overwrite && isConflict) {
+        const confirmOverwrite = confirm(
+          `Un fichier PNG avec ce nom existe déjà (${uploadName}.png). Voulez-vous l'écraser ?`
+        );
+        if (confirmOverwrite) {
+          await uploadProductImage(p, file, true);
+          return;
+        }
+      }
+
+      alert(message || "Erreur upload image");
     } finally {
       setUploadBusyId(null);
     }
