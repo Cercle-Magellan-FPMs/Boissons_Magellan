@@ -28,6 +28,8 @@ Main workflow:
 
 1. A user scans an RFID badge on the kiosk.
 2. The kiosk calls the backend to identify the user.
+   - If the badge is unknown, the kiosk can create a badge/account request with a name, email, and badge UID.
+   - Requested badges do not work until an admin approves the request.
 3. The kiosk displays available drinks and current stock.
 4. The user places an order.
 5. The backend stores the order, debits the user's prepaid balance, decrements stock, and records stock/account movements.
@@ -39,6 +41,7 @@ Business concepts implemented in the codebase:
 
 - Users have an RFID badge and can be active or disabled.
 - Users can have multiple RFID badge IDs mapped to the same account.
+- Unknown kiosk badges can be submitted as pending badge requests for a new user.
 - Users have a prepaid balance (`balance_cents`) that is debited at kiosk checkout.
 - Products have current stock and a price history.
 - Orders are recorded immediately when placed on the kiosk.
@@ -157,6 +160,11 @@ Registered route groups:
   - Sends account detail by email for the identified user
   - Email contains all top-ups and all consumptions
 
+- `POST /api/kiosk/badge-request`
+  - Creates a pending badge/account request from the kiosk
+  - Request body: `{ name: string, email: string, rfid_uid: string }`
+  - The badge is not usable until an admin approves the request
+
 ### Admin API
 
 All admin endpoints require the `x-admin-token` header, validated in `backend/src/routes/admin/_auth.ts`.
@@ -214,6 +222,16 @@ Users:
   - Returns top-up log entries (used by admin top-up log page)
   - Query filters: `name`, `from`, `to`, `method`
 
+Badge requests:
+
+- `GET /api/admin/badge-requests`
+  - Lists pending kiosk badge/account requests by default
+  - Optional query: `status=pending|approved|rejected|all`
+- `POST /api/admin/badge-requests/:id/approve`
+  - Creates a new active user from the request and activates the requested badge
+- `POST /api/admin/badge-requests/:id/reject`
+  - Rejects a pending badge request
+
 Email setup:
 
 - `GET /api/admin/email-settings`
@@ -236,6 +254,7 @@ Purpose:
 
 - Wait for a badge scan
 - Identify the user from direct badge scans, including newly added badges
+- Let unknown users request a new badge/account by entering their name and email
 - Display available drinks
 - Build a cart
 - Submit orders
@@ -264,6 +283,7 @@ Purpose:
 - Manage products and prices
 - Adjust stock
 - Manage users, multiple RFID badges, and prepaid balances
+- Approve or reject kiosk badge/account requests
 - Close periods
 - Review and mark debts as paid
 - Review top-up logs
@@ -291,11 +311,13 @@ Migrations are stored in `backend/src/db/migrations/`:
 - `003_accounts_badges_soft_delete.sql`
 - `004_prepaid_orders.sql`
 - `005_topup_payment_metadata.sql`
+- `006_badge_requests.sql`
 
 Core tables:
 
 - `users`: users and RFID mapping
 - `user_badges`: multiple badge IDs per user
+- `badge_requests`: kiosk-created badge/account requests awaiting admin approval
 - `account_transactions`: prepaid balance ledger
   - includes `payment_date` and `payment_method` metadata for top-ups
 - `products`: drink catalog

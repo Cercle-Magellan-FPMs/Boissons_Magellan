@@ -1,11 +1,31 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { randomUUID } from "crypto";
 import { getDB } from "../db/db.js";
 import { badgeMatchCandidates, normalizeBadgeUid } from "../lib/badgeUid.js";
 import { sendMail } from "../lib/mailer.js";
 
 function eurosFromCents(cents: number) {
   return `${(cents / 100).toFixed(2)} EUR`;
+}
+
+function badgeExistsSql(candidateCount: number) {
+  const placeholders = Array.from({ length: candidateCount }, () => "?").join(", ");
+  return `
+    SELECT u.id
+    FROM users u
+    WHERE u.deleted_at IS NULL
+      AND (
+        u.rfid_uid IN (${placeholders})
+        OR EXISTS (
+          SELECT 1
+          FROM user_badges ub
+          WHERE ub.user_id = u.id
+            AND ub.uid IN (${placeholders})
+        )
+      )
+    LIMIT 1
+  `;
 }
 
 export async function kioskRoutes(app: FastifyInstance) {
@@ -118,6 +138,68 @@ export async function kioskRoutes(app: FastifyInstance) {
     }
 
     return reply.send({ user });
+  });
+
+  app.post("/api/kiosk/badge-request", async (req, reply) => {
+    const body = z.object({
+      name: z.string().trim().min(1),
+      email: z.string().trim().email(),
+      rfid_uid: z.string().min(1),
+    }).safeParse(req.body);
+
+    if (!body.success) {
+      return reply.code(400).send({ error: "Invalid payload" });
+    }
+
+    const normalizedUid = normalizeBadgeUid(body.data.rfid_uid);
+    const uidCandidates = badgeMatchCandidates(body.data.rfid_uid);
+    if (!normalizedUid || uidCandidates.length === 0) {
+      return reply.code(400).send({ error: "Badge invalide" });
+    }
+
+    const db = getDB();
+    const existingUser = db
+      .prepare(badgeExistsSql(uidCandidates.length))
+      .get(...uidCandidates, ...uidCandidates);
+
+    if (existingUser) {
+      return reply.code(409).send({ error: "Ce badge est déjà lié à un compte." });
+    }
+
+    const pending = db.prepare(`
+      SELECT id
+      FROM badge_requests
+      WHERE status = 'pending'
+        AND normalized_uid IN (${uidCandidates.map(() => "?").join(", ")})
+      LIMIT 1
+    `).get(...uidCandidates);
+
+    if (pending) {
+      return reply.code(409).send({ error: "Une demande est déjà en attente pour ce badge." });
+    }
+
+    try {
+      const id = randomUUID();
+      db.prepare(`
+        INSERT INTO badge_requests (id, name, email, uid, normalized_uid)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(
+        id,
+        body.data.name.trim(),
+        body.data.email.trim(),
+        normalizedUid,
+        normalizedUid
+      );
+
+      return reply.send({ ok: true, request_id: id });
+    } catch (error: any) {
+      const message = String(error?.message || error);
+      if (message.includes("UNIQUE")) {
+        return reply.code(409).send({ error: "Une demande est déjà en attente pour ce badge." });
+      }
+      req.log.error({ error }, "badge request failed");
+      return reply.code(500).send({ error: "Impossible d'enregistrer la demande." });
+    }
   });
 
   app.get("/api/kiosk/debt/:userId", async (req, reply) => {

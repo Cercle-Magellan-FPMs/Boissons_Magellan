@@ -12,6 +12,7 @@ type DebtSummary = {
   total_cents: number;
   items: DebtItem[];
 };
+type BadgeRequestForm = { name: string; email: string; uid: string };
 
 const insufficientBalanceMessage =
   "Solde insuffisant, merci de faire un virement au compte suivant : BE70 7512 1182 7125";
@@ -47,6 +48,11 @@ export default function App() {
   const [blockedModal, setBlockedModal] = useState<{ title: string; message: string } | null>(null);
   const [paymentErrorModal, setPaymentErrorModal] = useState<string | null>(null);
   const [debtModalOpen, setDebtModalOpen] = useState(false);
+  const [badgeRequestOpen, setBadgeRequestOpen] = useState(false);
+  const [badgeRequestForm, setBadgeRequestForm] = useState<BadgeRequestForm>({ name: "", email: "", uid: "" });
+  const [badgeRequestMessage, setBadgeRequestMessage] = useState("");
+  const [badgeRequestError, setBadgeRequestError] = useState("");
+  const [badgeRequestSubmitting, setBadgeRequestSubmitting] = useState(false);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<Cart>({});
@@ -59,6 +65,7 @@ export default function App() {
   const scanTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
+    if (badgeRequestOpen) return;
     const focus = () => inputRef.current?.focus();
     focus();
     window.addEventListener("click", focus);
@@ -67,7 +74,7 @@ export default function App() {
       window.removeEventListener("click", focus);
       window.clearInterval(interval);
     };
-  }, []);
+  }, [badgeRequestOpen]);
 
   function showBlockedModal(name?: string) {
     const baseMessage =
@@ -108,6 +115,14 @@ export default function App() {
       }
       if (res.status === 409 && err.error === "Insufficient balance") {
         setStatus("Solde insuffisant. Rechargez votre compte avant de commander.");
+        return;
+      }
+      if (res.status === 404) {
+        setBadgeRequestForm((current) => ({ ...current, uid }));
+        setBadgeRequestMessage("");
+        setBadgeRequestError("");
+        setBadgeRequestOpen(true);
+        setStatus("Badge non reconnu. Remplissez le formulaire pour demander sa validation.");
         return;
       }
       const message = res.status === 409
@@ -217,6 +232,51 @@ export default function App() {
     });
   }
 
+  function openBadgeRequestForm(uid = "") {
+    setBadgeRequestForm({ name: "", email: "", uid });
+    setBadgeRequestMessage("");
+    setBadgeRequestError("");
+    setBadgeRequestOpen(true);
+  }
+
+  async function submitBadgeRequest(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const name = badgeRequestForm.name.trim();
+    const email = badgeRequestForm.email.trim();
+    const uid = normalizeBadgeUid(badgeRequestForm.uid);
+
+    setBadgeRequestMessage("");
+    setBadgeRequestError("");
+
+    if (!name || !email || !uid) {
+      setBadgeRequestError("Nom, email et badge sont obligatoires.");
+      return;
+    }
+
+    setBadgeRequestSubmitting(true);
+    try {
+      const res = await fetch("/api/kiosk/badge-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, rfid_uid: uid }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setBadgeRequestError(err.error || `Erreur (${res.status})`);
+        return;
+      }
+
+      setBadgeRequestForm({ name: "", email: "", uid: "" });
+      setBadgeRequestMessage("Demande envoyée. Le badge fonctionnera après validation par le comité.");
+      setStatus("Demande de badge envoyée. Le comité doit la valider.");
+    } catch {
+      setBadgeRequestError("Impossible d'envoyer la demande pour le moment.");
+    } finally {
+      setBadgeRequestSubmitting(false);
+    }
+  }
+
   const cartLines = Object.entries(cart)
     .map(([pid, qty]) => {
       const p = products.find(x => x.id === Number(pid));
@@ -323,6 +383,9 @@ export default function App() {
 
             <h1>Badgez pour commencer</h1>
             <p className="badge-status">{status}</p>
+            <button className="primary-button" onClick={() => openBadgeRequestForm()}>
+              Demander un compte / badge
+            </button>
           </section>
         )}
 
@@ -515,6 +578,68 @@ export default function App() {
           </section>
         )}
       </main>
+      {badgeRequestOpen && (
+        <div className="badge-request-backdrop" role="dialog" aria-modal="true">
+          <form className="badge-request-modal" onSubmit={submitBadgeRequest}>
+            <div>
+              <h2>Demande de badge</h2>
+              <p>
+                Créez une demande avec votre nom, votre email et le badge à valider.
+                Le badge ne fonctionnera qu'après validation dans l'admin.
+              </p>
+            </div>
+
+            <label>
+              <span>Nom</span>
+              <input
+                value={badgeRequestForm.name}
+                onChange={(e) => setBadgeRequestForm((current) => ({ ...current, name: e.target.value }))}
+                placeholder="Nom et prénom"
+                autoFocus
+              />
+            </label>
+
+            <label>
+              <span>Email</span>
+              <input
+                type="email"
+                value={badgeRequestForm.email}
+                onChange={(e) => setBadgeRequestForm((current) => ({ ...current, email: e.target.value }))}
+                placeholder="prenom.nom@example.com"
+              />
+            </label>
+
+            <label>
+              <span>Badge</span>
+              <input
+                value={badgeRequestForm.uid}
+                onChange={(e) => setBadgeRequestForm((current) => ({ ...current, uid: e.target.value }))}
+                placeholder="Scanner ou saisir le badge"
+              />
+            </label>
+
+            {badgeRequestError && <p className="badge-request-error">{badgeRequestError}</p>}
+            {badgeRequestMessage && <p className="badge-request-success">{badgeRequestMessage}</p>}
+
+            <div className="badge-request-actions">
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => setBadgeRequestOpen(false)}
+              >
+                Fermer
+              </button>
+              <button
+                type="submit"
+                className="primary-button"
+                disabled={badgeRequestSubmitting}
+              >
+                {badgeRequestSubmitting ? "Envoi..." : "Envoyer la demande"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
       {blockedModal && (
         <div className="blocked-modal-backdrop" role="dialog" aria-modal="true">
           <div className="blocked-modal">

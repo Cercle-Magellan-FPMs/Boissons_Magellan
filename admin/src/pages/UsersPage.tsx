@@ -3,8 +3,19 @@ import { api } from "../lib/api";
 import type { AdminUser } from "../lib/types";
 import { eurosFromCents } from "../lib/types";
 
+type PendingBadgeRequest = {
+  id: string;
+  name: string;
+  email: string;
+  uid: string;
+  normalized_uid: string;
+  status: "pending" | "approved" | "rejected";
+  requested_at: string;
+};
+
 export default function UsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [badgeRequests, setBadgeRequests] = useState<PendingBadgeRequest[]>([]);
   const [error, setError] = useState("");
   const [nameFilter, setNameFilter] = useState("");
 
@@ -25,8 +36,12 @@ export default function UsersPage() {
   async function load() {
     setError("");
     try {
-      const data = await api<{ users: AdminUser[] }>("/api/admin/users");
-      setUsers(data.users);
+      const [usersData, requestsData] = await Promise.all([
+        api<{ users: AdminUser[] }>("/api/admin/users"),
+        api<{ requests: PendingBadgeRequest[] }>("/api/admin/badge-requests"),
+      ]);
+      setUsers(usersData.users);
+      setBadgeRequests(requestsData.requests);
     } catch (e: any) {
       setError(e.message);
     }
@@ -219,6 +234,30 @@ export default function UsersPage() {
     }
   }
 
+  async function approveBadgeRequest(request: PendingBadgeRequest) {
+    if (!confirm(`Créer le compte ${request.name} et activer le badge ${request.normalized_uid} ?`)) return;
+    try {
+      await api(`/api/admin/badge-requests/${request.id}/approve`, {
+        method: "POST",
+      });
+      await load();
+    } catch (e: any) {
+      alert(e.message);
+    }
+  }
+
+  async function rejectBadgeRequest(request: PendingBadgeRequest) {
+    if (!confirm(`Rejeter la demande de badge de ${request.name} ?`)) return;
+    try {
+      await api(`/api/admin/badge-requests/${request.id}/reject`, {
+        method: "POST",
+      });
+      await load();
+    } catch (e: any) {
+      alert(e.message);
+    }
+  }
+
   const filteredUsers = users.filter((u) =>
     u.name.toLowerCase().includes(nameFilter.trim().toLowerCase())
   );
@@ -246,6 +285,51 @@ export default function UsersPage() {
           Erreur: {error}
         </div>
       )}
+
+      <div style={{ padding: 12, border: "1px solid #333", borderRadius: 12 }}>
+        <h3 style={{ marginTop: 0 }}>Demandes de badge kiosk</h3>
+        <p style={{ marginTop: 0, opacity: 0.75 }}>
+          Ces badges ne fonctionnent pas tant qu'ils ne sont pas validés ici.
+        </p>
+
+        <div style={{ display: "grid", gap: 8 }}>
+          {badgeRequests.map((request) => (
+            <div
+              key={request.id}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "2fr 1.6fr 1.4fr auto",
+                gap: 8,
+                alignItems: "center",
+                padding: 10,
+                border: "1px solid #444",
+                borderRadius: 10,
+              }}
+            >
+              <div>
+                <div style={{ fontWeight: 900 }}>{request.name}</div>
+                <div style={{ opacity: 0.75 }}>{request.email}</div>
+              </div>
+              <div>
+                <div style={{ fontWeight: 800 }}>{request.normalized_uid}</div>
+                <div style={{ opacity: 0.7 }}>Badge demandé</div>
+              </div>
+              <div style={{ opacity: 0.75 }}>
+                {request.requested_at}
+              </div>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                <button onClick={() => approveBadgeRequest(request)} style={{ fontWeight: 900 }}>
+                  Valider
+                </button>
+                <button onClick={() => rejectBadgeRequest(request)}>
+                  Rejeter
+                </button>
+              </div>
+            </div>
+          ))}
+          {badgeRequests.length === 0 && <p style={{ opacity: 0.7 }}>Aucune demande en attente.</p>}
+        </div>
+      </div>
 
       <div style={{ padding: 12, border: "1px solid #333", borderRadius: 12 }}>
         <h3 style={{ marginTop: 0 }}>Liste</h3>
