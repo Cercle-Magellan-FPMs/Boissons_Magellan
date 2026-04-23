@@ -617,6 +617,7 @@ From the repository root:
 - Purpose:
   - reset stocks (`stock_current` to `0`, `stock_moves` cleared)
   - reset top-ups (`account_transactions` rows with `reason='topup'`, and remove their effect from `users.balance_cents`)
+  - reset consumptions (clear `orders` / `order_items` and `account_transactions.reason='purchase'`, with balance correction)
   - reset period/debt tables (`billing_periods`, `period_debts`, `monthly_debts`, `debt_mail_log`)
   - reset QR declarations (`qr_code_payments`)
 - Usage:

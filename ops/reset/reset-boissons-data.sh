@@ -15,6 +15,9 @@ sqlite3 "$DB_PATH" <<'SQL'
 SELECT 'stock_current_rows', COUNT(*) FROM stock_current;
 SELECT 'stock_moves_rows', COUNT(*) FROM stock_moves;
 SELECT 'topup_rows', COUNT(*) FROM account_transactions WHERE reason = 'topup';
+SELECT 'purchase_rows', COUNT(*) FROM account_transactions WHERE reason = 'purchase';
+SELECT 'orders_rows', COUNT(*) FROM orders;
+SELECT 'order_items_rows', COUNT(*) FROM order_items;
 SELECT 'billing_periods_rows', COUNT(*) FROM billing_periods;
 SELECT 'period_debts_rows', COUNT(*) FROM period_debts;
 SELECT 'monthly_debts_rows', COUNT(*) FROM monthly_debts;
@@ -44,13 +47,29 @@ SET balance_cents = balance_cents - COALESCE((
 DELETE FROM account_transactions
 WHERE reason = 'topup';
 
--- 3) RESET PÉRIODES / DETTES CLOTURÉES
+-- 3) RESET CONSOMMATIONS
+-- On annule l'effet des achats prépayés supprimés sur le solde utilisateur.
+UPDATE users
+SET balance_cents = balance_cents - COALESCE((
+  SELECT SUM(at.delta_cents)
+  FROM account_transactions at
+  WHERE at.user_id = users.id
+    AND at.reason = 'purchase'
+), 0);
+
+DELETE FROM account_transactions
+WHERE reason = 'purchase';
+
+DELETE FROM order_items;
+DELETE FROM orders;
+
+-- 4) RESET PÉRIODES / DETTES CLOTURÉES
 DELETE FROM period_debts;
 DELETE FROM billing_periods;
 DELETE FROM monthly_debts;
 DELETE FROM debt_mail_log;
 
--- 4) RESET DÉCLARATIONS QR CODE
+-- 5) RESET DÉCLARATIONS QR CODE
 DELETE FROM qr_code_payments;
 
 COMMIT;
@@ -61,6 +80,9 @@ sqlite3 "$DB_PATH" <<'SQL'
 SELECT 'stock_current_non_zero_qty', COUNT(*) FROM stock_current WHERE qty <> 0;
 SELECT 'stock_moves_rows', COUNT(*) FROM stock_moves;
 SELECT 'topup_rows', COUNT(*) FROM account_transactions WHERE reason = 'topup';
+SELECT 'purchase_rows', COUNT(*) FROM account_transactions WHERE reason = 'purchase';
+SELECT 'orders_rows', COUNT(*) FROM orders;
+SELECT 'order_items_rows', COUNT(*) FROM order_items;
 SELECT 'billing_periods_rows', COUNT(*) FROM billing_periods;
 SELECT 'period_debts_rows', COUNT(*) FROM period_debts;
 SELECT 'monthly_debts_rows', COUNT(*) FROM monthly_debts;
