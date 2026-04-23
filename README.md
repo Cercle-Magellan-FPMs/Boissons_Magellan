@@ -36,6 +36,7 @@ Main workflow:
 6. Admins can review debts, close billing periods, mark debts as paid, restock products, top up balances, and manage users/products.
 7. User signup in admin requires an email.
 8. Top-ups require a mandatory comment and payment metadata (payment date + payment method) for positive recharges.
+9. If balance is insufficient at checkout, kiosk proposes a QR Code EPC v2 payment flow and records a pending payment declaration only after explicit user confirmation.
 
 Business concepts implemented in the codebase:
 
@@ -121,6 +122,7 @@ Registered route groups:
 - `adminClosePeriodRoutes`
 - `adminUserRoutes`
 - `adminEmailSettingsRoutes`
+- `qrCodeRoutes`
 
 ### Health
 
@@ -155,7 +157,28 @@ Registered route groups:
   - Insufficient balance message returned by API:
     - `Solde insuffisant, merci de faire un virement au compte suivant : BE70 7512 1182 7125`
   - The kiosk checkout displays that message directly in the cart and opens a blocking modal when a logged-in user submits an order without enough balance.
+  - From that modal, the user can choose `Payer par QR Code` to generate an EPC v2 QR code locally.
   - Decrements stock, debits the user balance, and writes stock/account movement rows
+
+- `POST /api/kiosk/qr-code/prepare`
+  - Prepares a QR Code EPC v2 payload for insufficient-balance checkout
+  - Uses configurable banking settings (recipient, IBAN, BIC, remittance prefix)
+  - Generates:
+    - a random `UNIQUE_ID`
+    - EPC payload
+    - PNG QR code as data URL
+    - signed intent token to bind `UNIQUE_ID + user + amount`
+  - Does not insert any payment row at this stage
+
+- `POST /api/kiosk/qr-code/confirm`
+  - Called only when user clicks `J'ai payé par QR Code`
+  - Validates signed intent token and inserts payment declaration row
+  - Stores:
+    - `unique_id`
+    - `user_id`
+    - `amount_cents`
+    - `created_at`
+    - `status` (`unverified` by default)
 
 - `POST /api/kiosk/account-detail/request`
   - Sends account detail by email for the identified user
@@ -269,6 +292,21 @@ Email setup:
 - `POST /api/admin/email-settings/test`
   - Sends a test email to validate the SMTP account
 
+QR Code payments:
+
+- `GET /api/admin/qr-code`
+  - Lists QR payment declarations with `unique_id`, user, amount, date/time, and status
+- `PATCH /api/admin/qr-code/:id`
+  - Updates status: `verified` or `unverified`
+- `GET /api/admin/qr-code/settings`
+  - Returns editable banking settings for EPC generation
+- `PUT /api/admin/qr-code/settings`
+  - Updates banking settings:
+    - `recipient_name`
+    - `iban`
+    - `bic`
+    - `remittance_prefix` (text-before-UNIQUE_ID)
+
 ## Frontend Structure
 
 ### Kiosk frontend
@@ -312,6 +350,8 @@ Purpose:
 - Close periods
 - Review and mark debts as paid
 - Review top-up logs
+- Review and verify QR Code payment declarations
+- Edit QR Code banking information used by kiosk
 
 Main files:
 

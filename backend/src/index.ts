@@ -14,6 +14,7 @@ import { adminDebtSummaryCurrentRoutes } from "./routes/admin/debtSummaryCurrent
 import { adminClosePeriodRoutes } from "./routes/admin/closePeriod.js";
 import { adminUserRoutes } from "./routes/admin/users.js";
 import { adminEmailSettingsRoutes } from "./routes/admin/emailSettings.js";
+import { qrCodeRoutes } from "./routes/qrCode.js";
 
 
 const app = Fastify({ logger: true });
@@ -41,6 +42,7 @@ app.register(adminDebtSummaryCurrentRoutes);
 app.register(adminClosePeriodRoutes);
 app.register(adminUserRoutes);
 app.register(adminEmailSettingsRoutes);
+app.register(qrCodeRoutes);
 
 
 

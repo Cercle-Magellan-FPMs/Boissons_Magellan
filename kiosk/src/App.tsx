@@ -14,6 +14,17 @@ type DebtSummary = {
 };
 type BadgeRequestForm = { name: string; email: string; uid: string };
 type AccountDetailDialog = "confirm" | "success" | null;
+type QrPaymentData = {
+  unique_id: string;
+  amount_cents: number;
+  recipient_name: string;
+  iban: string;
+  bic: string;
+  remittance: string;
+  qr_code_data_url: string;
+  intent_token: string;
+  expires_at: string;
+};
 
 const insufficientBalanceMessage =
   "Solde insuffisant, merci de faire un virement au compte suivant : BE70 7512 1182 7125";
@@ -48,6 +59,11 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [blockedModal, setBlockedModal] = useState<{ title: string; message: string } | null>(null);
   const [paymentErrorModal, setPaymentErrorModal] = useState<string | null>(null);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [qrPaymentData, setQrPaymentData] = useState<QrPaymentData | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrError, setQrError] = useState("");
+  const [qrConfirmLoading, setQrConfirmLoading] = useState(false);
   const [debtModalOpen, setDebtModalOpen] = useState(false);
   const [accountDetailDialog, setAccountDetailDialog] = useState<AccountDetailDialog>(null);
   const [accountDetailError, setAccountDetailError] = useState("");
@@ -92,6 +108,9 @@ export default function App() {
     setCart({});
     setCheckoutMessage("");
     setPaymentErrorModal(null);
+    setQrModalOpen(false);
+    setQrPaymentData(null);
+    setQrError("");
     setDebtModalOpen(false);
     setAccountDetailDialog(null);
     setScreen("badge");
@@ -146,6 +165,9 @@ export default function App() {
     setCart({});
     setCheckoutMessage("");
     setPaymentErrorModal(null);
+    setQrModalOpen(false);
+    setQrPaymentData(null);
+    setQrError("");
     setScreen("products");
   }
 
@@ -292,6 +314,76 @@ export default function App() {
 
   const totalCents = cartLines.reduce((sum, l) => sum + (l.product.price_cents ?? 0) * l.qty, 0);
 
+  async function prepareQrPayment() {
+    if (!user || totalCents <= 0) return;
+
+    setQrLoading(true);
+    setQrError("");
+    setQrPaymentData(null);
+    setQrModalOpen(true);
+
+    try {
+      const res = await fetch("/api/kiosk/qr-code/prepare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: user.id,
+          amount_cents: totalCents,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setQrError(err.error || `Erreur (${res.status})`);
+        return;
+      }
+
+      const data = await res.json() as QrPaymentData;
+      setQrPaymentData(data);
+    } catch {
+      setQrError("Impossible de générer le QR Code pour le moment.");
+    } finally {
+      setQrLoading(false);
+    }
+  }
+
+  async function confirmQrPayment() {
+    if (!user || !qrPaymentData) return;
+
+    setQrConfirmLoading(true);
+    setQrError("");
+
+    try {
+      const res = await fetch("/api/kiosk/qr-code/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: user.id,
+          amount_cents: qrPaymentData.amount_cents,
+          unique_id: qrPaymentData.unique_id,
+          intent_token: qrPaymentData.intent_token,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setQrError(err.error || `Erreur (${res.status})`);
+        return;
+      }
+
+      setQrModalOpen(false);
+      setPaymentErrorModal(null);
+      setCheckoutMessage(
+        `Paiement QR Code déclaré (${qrPaymentData.unique_id}). Le comité doit encore le vérifier.`
+      );
+      setStatus("Paiement QR Code déclaré, en attente de vérification.");
+    } catch {
+      setQrError("Impossible d'enregistrer la déclaration de paiement.");
+    } finally {
+      setQrConfirmLoading(false);
+    }
+  }
+
   async function submitOrder() {
     if (!user) return;
     if (cartLines.length === 0) return;
@@ -335,6 +427,9 @@ export default function App() {
       setCart({});
       setCheckoutMessage("");
       setPaymentErrorModal(null);
+      setQrModalOpen(false);
+      setQrPaymentData(null);
+      setQrError("");
       setDebtModalOpen(false);
       setAccountDetailDialog(null);
       setStatus("Pas de badge ? Contactez le comité.");
@@ -444,6 +539,9 @@ export default function App() {
                     setCart({});
                     setCheckoutMessage("");
                     setPaymentErrorModal(null);
+                    setQrModalOpen(false);
+                    setQrPaymentData(null);
+                    setQrError("");
                     setDebtModalOpen(false);
                     setAccountDetailDialog(null);
                     setStatus("Pas de badge ? Contactez le comité.");
@@ -738,10 +836,58 @@ export default function App() {
             <p>{paymentErrorModal}</p>
             <div className="payment-modal-actions">
               <button
+                className="ghost-button"
+                onClick={prepareQrPayment}
+                disabled={qrLoading || !user || totalCents <= 0}
+              >
+                {qrLoading ? "Génération..." : "Payer par QR Code"}
+              </button>
+              <button
                 className="payment-modal-button"
                 onClick={() => setPaymentErrorModal(null)}
               >
                 OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {qrModalOpen && (
+        <div className="payment-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="payment-modal qr-payment-modal">
+            <h2>Paiement par QR Code</h2>
+            {qrLoading && <p>Génération du QR Code...</p>}
+            {!qrLoading && qrError && <p>{qrError}</p>}
+            {!qrLoading && !qrError && qrPaymentData && (
+              <div className="qr-payment-content">
+                <img src={qrPaymentData.qr_code_data_url} alt="QR Code EPC" className="qr-code-image" />
+                <div className="qr-payment-meta">
+                  <div>Montant: <strong>{euros(qrPaymentData.amount_cents)}</strong></div>
+                  <div>Bénéficiaire: <strong>{qrPaymentData.recipient_name}</strong></div>
+                  <div>IBAN: <strong>{qrPaymentData.iban}</strong></div>
+                  <div>BIC: <strong>{qrPaymentData.bic}</strong></div>
+                  <div>Communication: <strong>{qrPaymentData.remittance}</strong></div>
+                  <div>Référence unique: <strong>{qrPaymentData.unique_id}</strong></div>
+                </div>
+              </div>
+            )}
+            <div className="payment-modal-actions">
+              <button
+                className="ghost-button"
+                onClick={() => {
+                  setQrModalOpen(false);
+                  setQrError("");
+                }}
+                disabled={qrConfirmLoading}
+              >
+                Fermer
+              </button>
+              <button
+                className="payment-modal-button"
+                onClick={confirmQrPayment}
+                disabled={qrLoading || !qrPaymentData || qrConfirmLoading}
+              >
+                {qrConfirmLoading ? "Enregistrement..." : "J'ai payé par QR Code"}
               </button>
             </div>
           </div>

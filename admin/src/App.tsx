@@ -7,9 +7,10 @@ import DebtsPage from "./pages/DebtsPage";
 import TopupsLogPage from "./pages/TopupsLogPage";
 import UsersPage from "./pages/UsersPage";
 import EmailSettingsPage from "./pages/EmailSettingsPage";
+import QrCodePage from "./pages/QrCodePage";
 
-type Page = "products" | "restock" | "debts" | "topups" | "users" | "email";
-const PAGES: Page[] = ["products", "restock", "debts", "topups", "users", "email"];
+type Page = "products" | "restock" | "debts" | "topups" | "users" | "qrcode" | "email";
+const PAGES: Page[] = ["products", "restock", "debts", "topups", "users", "qrcode", "email"];
 
 function normalizePage(value: string | null | undefined): Page | null {
   if (!value) return null;
@@ -130,6 +131,12 @@ export default function App() {
               Utilisateurs
             </button>
             <button
+              className={`nav-button ${page === "qrcode" ? "active" : ""}`}
+              onClick={() => goTo("qrcode")}
+            >
+              QR Code
+            </button>
+            <button
               className={`nav-button ${page === "email" ? "active" : ""}`}
               onClick={() => goTo("email")}
             >
@@ -144,6 +151,7 @@ export default function App() {
           {page === "debts" && <DebtsPage />}
           {page === "topups" && <TopupsLogPage />}
           {page === "users" && <UsersPage />}
+          {page === "qrcode" && <QrCodePage />}
           {page === "email" && <EmailSettingsPage />}
         </main>
       </div>

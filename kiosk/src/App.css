@@ -528,6 +528,34 @@
   font-weight: 800;
 }
 
+.qr-payment-modal {
+  width: min(720px, 94vw);
+  text-align: left;
+}
+
+.qr-payment-content {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 18px;
+  align-items: start;
+  margin-top: 10px;
+}
+
+.qr-code-image {
+  width: 220px;
+  height: 220px;
+  border-radius: 14px;
+  background: #fff;
+  padding: 8px;
+}
+
+.qr-payment-meta {
+  display: grid;
+  gap: 8px;
+  color: #fff5e6;
+  font-size: 1rem;
+}
+
 .account-detail-backdrop {
   position: fixed;
   inset: 0;
@@ -659,4 +687,17 @@
   width: min(1000px, 94vw);
   max-height: 90vh;
   overflow: auto;
+}
+
+@media (max-width: 640px) {
+  .qr-payment-content {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .qr-code-image {
+    width: min(72vw, 250px);
+    height: auto;
+    aspect-ratio: 1 / 1;
+  }
 }
