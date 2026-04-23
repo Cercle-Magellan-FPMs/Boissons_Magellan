@@ -19,6 +19,7 @@ SELECT 'billing_periods_rows', COUNT(*) FROM billing_periods;
 SELECT 'period_debts_rows', COUNT(*) FROM period_debts;
 SELECT 'monthly_debts_rows', COUNT(*) FROM monthly_debts;
 SELECT 'debt_mail_log_rows', COUNT(*) FROM debt_mail_log;
+SELECT 'qr_code_payments_rows', COUNT(*) FROM qr_code_payments;
 SQL
 
 sqlite3 "$DB_PATH" <<'SQL'
@@ -49,6 +50,9 @@ DELETE FROM billing_periods;
 DELETE FROM monthly_debts;
 DELETE FROM debt_mail_log;
 
+-- 4) RESET DÉCLARATIONS QR CODE
+DELETE FROM qr_code_payments;
+
 COMMIT;
 SQL
 
@@ -61,6 +65,7 @@ SELECT 'billing_periods_rows', COUNT(*) FROM billing_periods;
 SELECT 'period_debts_rows', COUNT(*) FROM period_debts;
 SELECT 'monthly_debts_rows', COUNT(*) FROM monthly_debts;
 SELECT 'debt_mail_log_rows', COUNT(*) FROM debt_mail_log;
+SELECT 'qr_code_payments_rows', COUNT(*) FROM qr_code_payments;
 SQL
 
 echo "[OK] Reset terminé."

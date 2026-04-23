@@ -618,6 +618,7 @@ From the repository root:
   - reset stocks (`stock_current` to `0`, `stock_moves` cleared)
   - reset top-ups (`account_transactions` rows with `reason='topup'`, and remove their effect from `users.balance_cents`)
   - reset period/debt tables (`billing_periods`, `period_debts`, `monthly_debts`, `debt_mail_log`)
+  - reset QR declarations (`qr_code_payments`)
 - Usage:
   - default DB: `ops/reset/reset-boissons-data.sh`
   - explicit DB path: `ops/reset/reset-boissons-data.sh /var/lib/boissons/app.db`
