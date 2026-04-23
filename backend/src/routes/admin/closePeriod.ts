@@ -74,12 +74,27 @@ export async function adminClosePeriodRoutes(app: FastifyInstance) {
       errors: [] as Array<{ user_id: number; error: string }>,
     };
 
+    const debtByUser = new Map<number, number>();
     for (const summary of sums) {
-      const user = db.prepare(`
-        SELECT id, name, email
-        FROM users
-        WHERE id = ?
-      `).get(summary.user_id) as { id: number; name: string; email: string | null } | undefined;
+      debtByUser.set(summary.user_id, Number(summary.amount_cents ?? 0));
+    }
+
+    const mailTargets = db.prepare(`
+      SELECT DISTINCT
+        u.id,
+        u.name,
+        u.email
+      FROM users u
+      JOIN orders o ON o.user_id = u.id
+      WHERE o.status = 'committed'
+        AND o.ts >= ?
+        AND o.ts < ?
+        AND u.deleted_at IS NULL
+      ORDER BY u.name ASC
+    `).all(start_ts, end) as Array<{ id: number; name: string; email: string | null }>;
+
+    for (const user of mailTargets) {
+      const userDebtCents = debtByUser.get(user.id) ?? 0;
 
       if (!user?.email) {
         mailStats.skipped += 1;
@@ -96,12 +111,11 @@ export async function adminClosePeriodRoutes(app: FastifyInstance) {
         JOIN products p ON p.id = oi.product_id
         WHERE o.user_id = ?
           AND o.status = 'committed'
-          AND COALESCE(o.paid_from_balance, 0) = 0
           AND o.ts >= ?
           AND o.ts < ?
         GROUP BY p.name
         ORDER BY p.name ASC
-      `).all(summary.user_id, start_ts, end) as Array<{
+      `).all(user.id, start_ts, end) as Array<{
         product_name: string;
         qty: number;
         amount_cents: number;
@@ -116,10 +130,11 @@ export async function adminClosePeriodRoutes(app: FastifyInstance) {
       const body = [
         `Bonjour ${user.name},`,
         "",
-        "Votre consommation sur la période clôturée est disponible ci-dessous.",
+        "Votre extrait de compte sur la période clôturée est disponible ci-dessous.",
         "",
         `Période: ${start_ts} -> ${end}`,
-        `Total période: ${eurosFromCents(Number(summary.amount_cents ?? 0))}`,
+        `Total consommations: ${eurosFromCents(Number(lines.reduce((acc, line) => acc + Number(line.amount_cents ?? 0), 0)))}`,
+        `Montant à facturer période clôturée: ${eurosFromCents(userDebtCents)}`,
         "",
         "Détail:",
         ...detail,
@@ -130,15 +145,15 @@ export async function adminClosePeriodRoutes(app: FastifyInstance) {
       try {
         await sendMail({
           to: user.email,
-          subject: "Boissons Magellan - Consommation période clôturée",
+          subject: "Boissons Magellan - Extrait de compte période clôturée",
           text: body,
         });
         mailStats.sent += 1;
       } catch (error: unknown) {
         const message = String((error as Error)?.message ?? error);
         mailStats.failed += 1;
-        mailStats.errors.push({ user_id: summary.user_id, error: message });
-        req.log.error({ user_id: summary.user_id, error }, "close period mail failed");
+        mailStats.errors.push({ user_id: user.id, error: message });
+        req.log.error({ user_id: user.id, error }, "close period mail failed");
       }
     }
 
