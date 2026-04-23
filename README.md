@@ -12,6 +12,29 @@ Mandatory Codex working rules are defined in `CODEX_RULES.md`.
 
 An Ubuntu host deployment path based on `systemd` and host `nginx` is included for production use.
 
+## Repository Structure
+
+- `backend/`: Fastify API, migrations, DB access, business rules.
+- `kiosk/`: user-facing kiosk frontend.
+- `admin/`: admin frontend.
+- `ops/`: deployment and backup scripts.
+- `docs/`: concise technical docs (`api`, `data-model`, `adr`).
+
+## Setup (Quick)
+
+1. Backend:
+   - `cd backend`
+   - `npm install`
+   - `npm run migrate`
+   - `npm run dev`
+2. Frontends (separate terminals):
+   - `cd admin && npm install && npm run dev`
+   - `cd kiosk && npm install && npm run dev`
+3. Optional seed:
+   - `cd backend`
+   - `npm run seed`
+   - `npm run seed:products`
+
 ## Mandatory Codex Workflow
 
 Every Codex agent working on this repository must follow `CODEX_RULES.md`:
@@ -53,6 +76,42 @@ Business concepts implemented in the codebase:
   - live/current debt from open orders
   - closed debt generated when an admin closes a billing period
 - Admin actions are protected with an `x-admin-token` header.
+
+## Project Overview for AI / LLM
+
+### Purpose
+Provide a local drink-selling platform with RFID identification, prepaid balance, stock tracking, debt closing, and QR fallback payment when balance is insufficient.
+
+### Main components
+- Backend API (`backend/src/index.ts` + `backend/src/routes/*`)
+- Kiosk frontend (`kiosk/src/App.tsx`)
+- Admin frontend (`admin/src/App.tsx` + `admin/src/pages/*`)
+- SQLite DB (`backend/src/db/migrations/*.sql`)
+
+### Data flow
+1. Kiosk identifies user from badge (`/api/kiosk/identify`).
+2. Kiosk loads products (`/api/kiosk/products`) and sends order (`/api/kiosk/order`).
+3. Backend writes order/items, updates stock, updates balance (or debt/QR flow).
+4. Admin manages users/products/stock/debts and verifies QR declarations.
+
+### Key files
+- Backend bootstrap: `backend/src/index.ts`
+- Checkout logic: `backend/src/routes/order.ts`
+- QR flow: `backend/src/routes/qrCode.ts`
+- Kiosk UI flow: `kiosk/src/App.tsx`
+- Admin routing: `admin/src/App.tsx`
+- Migrations: `backend/src/db/migrations/`
+
+### Entry points
+- Backend: `backend/src/index.ts`
+- Admin app: `admin/src/main.tsx`
+- Kiosk app: `kiosk/src/main.tsx`
+
+For compact deep-dive docs:
+- `ARCHITECTURE.md`
+- `docs/api.md`
+- `docs/data-model.md`
+- `docs/adr/`
 
 ## High-Level Architecture
 
@@ -363,7 +422,7 @@ Main files:
 - `admin/src/App.tsx`: main layout and page navigation
 - `admin/src/lib/api.ts`: fetch wrapper adding `x-admin-token`
 - `admin/src/lib/types.ts`: shared frontend types
-- `admin/src/pages/ProductsPage.tsx`: product listing, creation, rename, price updates, activation, image slug, and PNG upload with custom upload name
+- `admin/src/pages/ProductsPage.tsx`: product listing, creation, rename, price updates, activation, and PNG upload bound to selected product
 - `admin/src/pages/RestockPage.tsx`: stock input form and correction/restock submission, with CSV import/export for stock list
 - `admin/src/pages/DebtsPage.tsx`: close period and manage debt payment state
 - `admin/src/pages/TopupsLogPage.tsx`: top-up log with date/method/user filters
@@ -383,6 +442,7 @@ Migrations are stored in `backend/src/db/migrations/`:
 - `005_topup_payment_metadata.sql`
 - `006_badge_requests.sql`
 - `007_users_local_access.sql`
+- `008_qr_code_payments.sql`
 
 Core tables:
 
@@ -458,6 +518,11 @@ Legacy / secondary tables still present:
 │   │   └── boissons-backup.sh
 │   └── vm/
 │       └── deploy-host.sh
+├── docs/
+│   ├── adr/
+│   ├── api.md
+│   └── data-model.md
+├── ARCHITECTURE.md
 ├── CODEX_RULES.md
 └── README.md
 ```
