@@ -16,7 +16,7 @@ export async function adminClosePeriodRoutes(app: FastifyInstance) {
     }
 
     const bodySchema = z.object({
-      comment: z.string().optional(),
+      comment: z.string().trim().min(1),
     });
     const parsed = bodySchema.safeParse(req.body ?? {});
     if (!parsed.success) return reply.code(400).send({ error: "Invalid payload" });
@@ -51,7 +51,7 @@ export async function adminClosePeriodRoutes(app: FastifyInstance) {
       db.prepare(`
         INSERT INTO billing_periods (id, start_ts, end_ts, comment)
         VALUES (?, ?, ?, ?)
-      `).run(period_id, start_ts, end, parsed.data.comment ?? null);
+      `).run(period_id, start_ts, end, parsed.data.comment);
 
       const ins = db.prepare(`
         INSERT INTO period_debts (period_id, user_id, amount_cents, status, generated_at)
@@ -131,7 +131,7 @@ export async function adminClosePeriodRoutes(app: FastifyInstance) {
         "",
         "Votre extrait de compte sur la période clôturée est disponible ci-dessous.",
         "",
-        parsed.data.comment?.trim() ? parsed.data.comment.trim() : "[Aucun commentaire de clôture]",
+        parsed.data.comment,
         "",
         `Période: ${start_ts} -> ${end}`,
         `Total consommations: ${eurosFromCents(Number(lines.reduce((acc, line) => acc + Number(line.amount_cents ?? 0), 0)))}`,

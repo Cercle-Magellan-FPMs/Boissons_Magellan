@@ -209,6 +209,7 @@ Closing operations:
 
 - `POST /api/admin/close-period`
   - Closes everything since the last billing period and creates `period_debts`
+  - `comment` is mandatory
   - Sends each concerned user an email extract with consumption details for the closed period
   - Includes close-period comment in the email body
   - Email is sent even when the period debt is `0` (for example, prepaid consumptions)

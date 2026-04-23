@@ -33,8 +33,11 @@ export default function DebtsPage() {
 
   async function closePeriodAction() {
     setCloseMsg("");
+    if (!comment.trim()) {
+      setCloseMsg("Erreur cloture: commentaire obligatoire.");
+      return;
+    }
     try {
-      const payload = comment.trim() ? { comment: comment.trim() } : {};
       const res = await api<{
         ok: true;
         period_id: string;
@@ -43,7 +46,7 @@ export default function DebtsPage() {
         created: number;
       }>("/api/admin/close-period", {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ comment: comment.trim() }),
       });
       setCloseMsg(`Cloture OK: ${res.start_ts} -> ${res.end_ts} (dettes creees: ${res.created})`);
       setComment("");
@@ -116,7 +119,7 @@ export default function DebtsPage() {
           <input
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            placeholder="Commentaire (optionnel)"
+            placeholder="Mandat 188"
             style={{ padding: 8, minWidth: 240 }}
           />
           <button onClick={closePeriodAction} style={{ fontWeight: 900 }}>
