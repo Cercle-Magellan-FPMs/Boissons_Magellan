@@ -6,8 +6,9 @@ import RestockPage from "./pages/RestockPage";
 import DebtsPage from "./pages/DebtsPage";
 import TopupsLogPage from "./pages/TopupsLogPage";
 import UsersPage from "./pages/UsersPage";
+import EmailSettingsPage from "./pages/EmailSettingsPage";
 
-type Page = "products" | "restock" | "debts" | "topups" | "users";
+type Page = "products" | "restock" | "debts" | "topups" | "users" | "email";
 
 export default function App() {
   const [page, setPage] = useState<Page>("products");
@@ -57,6 +58,12 @@ export default function App() {
             >
               Utilisateurs
             </button>
+            <button
+              className={`nav-button ${page === "email" ? "active" : ""}`}
+              onClick={() => setPage("email")}
+            >
+              Email
+            </button>
           </nav>
         </header>
 
@@ -66,6 +73,7 @@ export default function App() {
           {page === "debts" && <DebtsPage />}
           {page === "topups" && <TopupsLogPage />}
           {page === "users" && <UsersPage />}
+          {page === "email" && <EmailSettingsPage />}
         </main>
       </div>
       <footer className="app-footer">Développé par Delens Raphaël</footer>

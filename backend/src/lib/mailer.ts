@@ -8,6 +8,10 @@ type MailPayload = {
 
 let cachedTransporter: nodemailer.Transporter | null = null;
 
+export function resetMailTransporter() {
+  cachedTransporter = null;
+}
+
 function getRequiredEnv(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) {

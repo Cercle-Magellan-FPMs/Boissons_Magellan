@@ -13,6 +13,7 @@ import { adminDebtSummaryRoutes } from "./routes/admin/debtSummary.js";
 import { adminDebtSummaryCurrentRoutes } from "./routes/admin/debtSummaryCurrent.js";
 import { adminClosePeriodRoutes } from "./routes/admin/closePeriod.js";
 import { adminUserRoutes } from "./routes/admin/users.js";
+import { adminEmailSettingsRoutes } from "./routes/admin/emailSettings.js";
 
 
 const app = Fastify({ logger: true });
@@ -39,6 +40,7 @@ app.register(adminDebtSummaryRoutes);
 app.register(adminDebtSummaryCurrentRoutes);
 app.register(adminClosePeriodRoutes);
 app.register(adminUserRoutes);
+app.register(adminEmailSettingsRoutes);
 
 
 

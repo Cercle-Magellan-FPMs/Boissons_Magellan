@@ -116,6 +116,7 @@ Registered route groups:
 - `adminDebtSummaryCurrentRoutes`
 - `adminClosePeriodRoutes`
 - `adminUserRoutes`
+- `adminEmailSettingsRoutes`
 
 ### Health
 
@@ -212,6 +213,18 @@ Users:
   - Returns top-up log entries (used by admin top-up log page)
   - Query filters: `name`, `from`, `to`, `method`
 
+Email setup:
+
+- `GET /api/admin/email-settings`
+  - Returns SMTP host, port, secure mode, user, sender, and whether a password is configured
+  - Never returns the SMTP password
+- `PUT /api/admin/email-settings`
+  - Saves SMTP settings to `backend/.env`
+  - Updates the running backend process immediately and resets the cached mail transporter
+  - An empty password keeps the existing configured password
+- `POST /api/admin/email-settings/test`
+  - Sends a test email to validate the SMTP account
+
 ## Frontend Structure
 
 ### Kiosk frontend
@@ -264,6 +277,7 @@ Main files:
 - `admin/src/pages/DebtsPage.tsx`: close period and manage debt payment state
 - `admin/src/pages/TopupsLogPage.tsx`: top-up log with date/method/user filters
 - `admin/src/pages/UsersPage.tsx`: user creation, activation, rename, multi-badge management, balance top-up, and user removal
+- `admin/src/pages/EmailSettingsPage.tsx`: SMTP sender-account setup and test email
 
 ## Database Structure
 
@@ -381,6 +395,8 @@ Relevant backend environment variables:
 - `SMTP_USER`
 - `SMTP_PASS`
 - `SMTP_FROM`
+
+The SMTP variables can be edited from the admin `Email` page. They are stored in `backend/.env`; the password is write-only from the UI and is not returned by the API.
 
 ### Required migration step
 
