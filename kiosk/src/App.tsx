@@ -373,10 +373,14 @@ export default function App() {
 
       setQrModalOpen(false);
       setPaymentErrorModal(null);
-      setCheckoutMessage(
-        `Paiement QR Code déclaré (${qrPaymentData.unique_id}). Le comité doit encore le vérifier.`
-      );
-      setStatus("Paiement QR Code déclaré, en attente de vérification.");
+      setCheckoutMessage("");
+      setCart({});
+      setUser(null);
+      setProducts([]);
+      setDebtModalOpen(false);
+      setAccountDetailDialog(null);
+      setScreen("badge");
+      setStatus(`Paiement QR Code déclaré (${qrPaymentData.unique_id}), vérification en attente.`);
     } catch {
       setQrError("Impossible d'enregistrer la déclaration de paiement.");
     } finally {
