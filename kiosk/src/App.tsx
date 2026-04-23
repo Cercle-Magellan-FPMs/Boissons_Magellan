@@ -45,6 +45,7 @@ export default function App() {
   const [status, setStatus] = useState("Pas de badge ? Contactez le comité.");
   const [user, setUser] = useState<User | null>(null);
   const [blockedModal, setBlockedModal] = useState<{ title: string; message: string } | null>(null);
+  const [paymentErrorModal, setPaymentErrorModal] = useState<string | null>(null);
   const [debtModalOpen, setDebtModalOpen] = useState(false);
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -79,6 +80,7 @@ export default function App() {
     setProducts([]);
     setCart({});
     setCheckoutMessage("");
+    setPaymentErrorModal(null);
     setDebtModalOpen(false);
     setScreen("badge");
     setStatus("Pas de badge ? Contactez le comité.");
@@ -123,6 +125,7 @@ export default function App() {
     await loadProducts();
     setCart({});
     setCheckoutMessage("");
+    setPaymentErrorModal(null);
     setScreen("products");
   }
 
@@ -198,11 +201,13 @@ export default function App() {
       return;
     }
     setCheckoutMessage("");
+    setPaymentErrorModal(null);
     setCart((c) => ({ ...c, [productId]: (c[productId] || 0) + 1 }));
   }
 
   function removeFromCart(productId: number) {
     setCheckoutMessage("");
+    setPaymentErrorModal(null);
     setCart((c) => {
       const next = { ...c };
       const q = next[productId] || 0;
@@ -244,7 +249,12 @@ export default function App() {
         showBlockedModal(err.user?.name);
         return;
       }
-      setStatus(err.error || `Erreur (${res.status})`);
+      const message = res.status === 409
+        ? insufficientBalanceMessage
+        : (err.error || `Erreur (${res.status})`);
+      setCheckoutMessage(message);
+      setStatus(message);
+      if (res.status === 409) setPaymentErrorModal(message);
       return;
     }
 
@@ -258,6 +268,7 @@ export default function App() {
       setProducts([]);
       setCart({});
       setCheckoutMessage("");
+      setPaymentErrorModal(null);
       setDebtModalOpen(false);
       setStatus("Pas de badge ? Contactez le comité.");
       setScreen("badge");
@@ -343,6 +354,7 @@ export default function App() {
                     setUser(null);
                     setCart({});
                     setCheckoutMessage("");
+                    setPaymentErrorModal(null);
                     setDebtModalOpen(false);
                     setStatus("Pas de badge ? Contactez le comité.");
                   }}
@@ -512,6 +524,22 @@ export default function App() {
               <button
                 className="blocked-modal-button"
                 onClick={() => setBlockedModal(null)}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {paymentErrorModal && (
+        <div className="payment-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="payment-modal">
+            <h2>Solde insuffisant</h2>
+            <p>{paymentErrorModal}</p>
+            <div className="payment-modal-actions">
+              <button
+                className="payment-modal-button"
+                onClick={() => setPaymentErrorModal(null)}
               >
                 OK
               </button>

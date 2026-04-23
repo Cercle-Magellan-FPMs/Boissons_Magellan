@@ -478,6 +478,54 @@
   border-color: rgba(255, 160, 160, 0.9);
 }
 
+.payment-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(12, 8, 4, 0.88);
+  display: grid;
+  place-items: center;
+  z-index: 60;
+  padding: 16px;
+}
+
+.payment-modal {
+  width: min(620px, 92vw);
+  border-radius: 24px;
+  padding: 30px;
+  background: linear-gradient(160deg, rgba(104, 48, 15, 0.98), rgba(24, 12, 6, 0.98));
+  border: 1px solid rgba(255, 190, 130, 0.9);
+  box-shadow: 0 30px 80px rgba(95, 40, 4, 0.75);
+  text-align: center;
+  animation: float-in 220ms ease-out;
+}
+
+.payment-modal h2 {
+  margin: 0 0 10px;
+  font-size: clamp(1.5rem, 3.4vw, 2.2rem);
+  color: #fff1df;
+}
+
+.payment-modal p {
+  margin: 0;
+  color: #fff7ec;
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.payment-modal-actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.payment-modal-button {
+  background: linear-gradient(120deg, rgba(255, 173, 96, 0.95), rgba(255, 221, 176, 0.85));
+  border: 1px solid rgba(255, 205, 150, 0.95);
+  color: #2b1505;
+  font-weight: 800;
+}
+
 .debt-modal-backdrop {
   position: fixed;
   inset: 0;
