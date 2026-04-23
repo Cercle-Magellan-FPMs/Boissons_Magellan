@@ -362,6 +362,10 @@ export default function App() {
           amount_cents: qrPaymentData.amount_cents,
           unique_id: qrPaymentData.unique_id,
           intent_token: qrPaymentData.intent_token,
+          items: cartLines.map((line) => ({
+            product_id: line.product.id,
+            qty: Number(line.qty),
+          })),
         }),
       });
 
@@ -374,13 +378,20 @@ export default function App() {
       setQrModalOpen(false);
       setPaymentErrorModal(null);
       setCheckoutMessage("");
-      setCart({});
-      setUser(null);
-      setProducts([]);
-      setDebtModalOpen(false);
-      setAccountDetailDialog(null);
-      setScreen("badge");
+      setQrPaymentData(null);
+      setQrError("");
+      setScreen("thanks");
       setStatus(`Paiement QR Code déclaré (${qrPaymentData.unique_id}), vérification en attente.`);
+
+      setTimeout(() => {
+        setCart({});
+        setUser(null);
+        setProducts([]);
+        setDebtModalOpen(false);
+        setAccountDetailDialog(null);
+        setScreen("badge");
+        setStatus("Pas de badge ? Contactez le comité.");
+      }, 3000);
     } catch {
       setQrError("Impossible d'enregistrer la déclaration de paiement.");
     } finally {

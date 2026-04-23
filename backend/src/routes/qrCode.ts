@@ -114,6 +114,12 @@ function signingSecret() {
   return process.env.QR_CODE_TOKEN_SECRET || process.env.ADMIN_TOKEN || "boissons-qr-secret";
 }
 
+function getMonthKeyParisLike(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+
 function signIntent(payload: string) {
   return createHmac("sha256", signingSecret()).update(payload).digest("hex");
 }
@@ -240,6 +246,10 @@ export async function qrCodeRoutes(app: FastifyInstance) {
       amount_cents: z.number().int().positive(),
       unique_id: z.string().trim().min(6).max(32),
       intent_token: z.string().min(20),
+      items: z.array(z.object({
+        product_id: z.number().int().positive(),
+        qty: z.number().int().positive(),
+      })).min(1),
     }).safeParse(req.body);
 
     if (!body.success) return reply.code(400).send({ error: "Invalid payload" });
@@ -272,28 +282,113 @@ export async function qrCodeRoutes(app: FastifyInstance) {
 
     const db = getDB();
     const user = db.prepare(`
-      SELECT id
+      SELECT id, is_active
       FROM users
       WHERE id = ?
         AND deleted_at IS NULL
-    `).get(body.data.user_id);
+    `).get(body.data.user_id) as { id: number; is_active: number } | undefined;
     if (!user) return reply.code(404).send({ error: "User not found" });
+    if (Number(user.is_active) !== 1) return reply.code(403).send({ error: "User disabled" });
 
     try {
-      db.prepare(`
-        INSERT INTO qr_code_payments (unique_id, user_id, amount_cents, status)
-        VALUES (?, ?, ?, 'unverified')
-      `).run(uniqueId, body.data.user_id, body.data.amount_cents);
+      const tx = db.transaction(() => {
+        let total = 0;
+        const resolved = body.data.items.map((it) => {
+          const product = db.prepare(
+            `SELECT id
+             FROM products
+             WHERE id = ?
+               AND deleted_at IS NULL
+               AND is_active = 1`
+          ).get(it.product_id) as any;
+          if (!product) throw new Error("PRODUCT_NOT_FOUND");
+
+          const priceRow = db.prepare(
+            `SELECT pp.price_cents
+             FROM product_prices pp
+             JOIN products p ON p.id = pp.product_id
+             WHERE pp.product_id = ?
+               AND p.deleted_at IS NULL
+               AND pp.starts_at <= datetime('now')
+             ORDER BY pp.starts_at DESC
+             LIMIT 1`
+          ).get(it.product_id) as any;
+
+          if (!priceRow) throw new Error("PRICE_MISSING");
+
+          const unit = Number(priceRow.price_cents);
+          total += unit * it.qty;
+
+          return { ...it, unit_price_cents: unit };
+        });
+
+        if (total !== body.data.amount_cents) {
+          throw new Error("AMOUNT_MISMATCH");
+        }
+
+        db.prepare(`
+          INSERT INTO qr_code_payments (unique_id, user_id, amount_cents, status)
+          VALUES (?, ?, ?, 'unverified')
+        `).run(uniqueId, body.data.user_id, body.data.amount_cents);
+
+        const orderId = randomBytes(16).toString("hex");
+        const monthKey = getMonthKeyParisLike();
+
+        db.prepare(
+          `INSERT INTO orders (id, user_id, month_key, total_cents, status, paid_from_balance)
+           VALUES (?, ?, ?, ?, 'committed', 0)`
+        ).run(orderId, body.data.user_id, monthKey, total);
+
+        const insertItem = db.prepare(
+          `INSERT INTO order_items (order_id, product_id, qty, unit_price_cents)
+           VALUES (?, ?, ?, ?)`
+        );
+
+        const moveId = randomBytes(16).toString("hex");
+        const insertMove = db.prepare(
+          `INSERT INTO stock_moves (move_id, product_id, delta_qty, reason, ref_id, comment)
+           VALUES (?, ?, ?, 'sale', ?, ?)`
+        );
+
+        const ensureStockRow = db.prepare(
+          `INSERT OR IGNORE INTO stock_current (product_id, qty) VALUES (?, 0)`
+        );
+        const updateStock = db.prepare(
+          `UPDATE stock_current SET qty = qty - ? WHERE product_id = ?`
+        );
+
+        for (const r of resolved) {
+          insertItem.run(orderId, r.product_id, r.qty, r.unit_price_cents);
+          insertMove.run(moveId, r.product_id, -r.qty, orderId, "vente kiosk paiement QR");
+          ensureStockRow.run(r.product_id);
+          updateStock.run(r.qty, r.product_id);
+        }
+
+        return { orderId, total };
+      });
+
+      const result = tx();
 
       return reply.send({
         ok: true,
         unique_id: uniqueId,
         status: "pas verifie",
+        order_id: result.orderId,
+        total_cents: result.total,
       });
     } catch (error: unknown) {
       const message = String((error as Error)?.message ?? error);
       if (message.includes("UNIQUE")) {
         return reply.code(409).send({ error: "Ce paiement QR Code a deja ete declare." });
+      }
+      if (message.includes("PRODUCT_NOT_FOUND")) {
+        return reply.code(404).send({ error: "Produit introuvable" });
+      }
+      if (message.includes("PRICE_MISSING")) {
+        return reply.code(500).send({ error: "Prix produit manquant" });
+      }
+      if (message.includes("AMOUNT_MISMATCH")) {
+        return reply.code(409).send({ error: "Le panier a changé. Merci de regénérer le QR Code." });
       }
       req.log.error({ error }, "qr code confirm failed");
       return reply.code(500).send({ error: "Erreur interne" });

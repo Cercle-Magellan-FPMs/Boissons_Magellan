@@ -176,7 +176,8 @@ Registered route groups:
 
 - `POST /api/kiosk/qr-code/confirm`
   - Called only when user clicks `J'ai payé par QR Code`
-  - Validates signed intent token and inserts payment declaration row
+  - Validates signed intent token, records payment declaration row, and commits kiosk order
+  - Decrements stock like a normal kiosk sale at confirmation time
   - Stores:
     - `unique_id`
     - `user_id`
