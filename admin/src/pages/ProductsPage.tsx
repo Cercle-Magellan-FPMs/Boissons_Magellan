@@ -12,6 +12,8 @@ export default function ProductsPage() {
   const [newPrice, setNewPrice] = useState<number>();
   const [newQty, setNewQty] = useState<number>();
   const [newSlug, setNewSlug] = useState("");
+  const [uploadNames, setUploadNames] = useState<Record<number, string>>({});
+  const [uploadBusyId, setUploadBusyId] = useState<number | null>(null);
 
   async function load() {
     setError("");
@@ -81,6 +83,45 @@ export default function ProductsPage() {
       await load();
     } catch (e: any) {
       alert(e.message);
+    }
+  }
+
+  async function uploadProductImage(p: AdminProduct, file: File | null) {
+    if (!file) return;
+    if (file.type !== "image/png" && !file.name.toLowerCase().endsWith(".png")) {
+      alert("Seuls les fichiers PNG sont autorisés.");
+      return;
+    }
+
+    const uploadName = (uploadNames[p.id] ?? "").trim();
+    if (!uploadName) {
+      alert("Donnez un nom à l'upload avant d'envoyer le fichier.");
+      return;
+    }
+
+    setUploadBusyId(p.id);
+    try {
+      const image_base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result ?? ""));
+        reader.onerror = () => reject(new Error("Impossible de lire le fichier"));
+        reader.readAsDataURL(file);
+      });
+
+      await api(`/api/admin/products/${p.id}/image-upload`, {
+        method: "POST",
+        body: JSON.stringify({
+          upload_name: uploadName,
+          image_base64,
+        }),
+      });
+
+      setUploadNames((prev) => ({ ...prev, [p.id]: "" }));
+      await load();
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setUploadBusyId(null);
     }
   }
 
@@ -214,7 +255,7 @@ export default function ProductsPage() {
               </div>
 
               <div>
-                <div style={{ fontWeight: 800 }}>{p.image_slug || "--"}</div>
+              <div style={{ fontWeight: 800 }}>{p.image_slug || "--"}</div>
                 <div style={{ opacity: 0.7 }}>Slug image</div>
               </div>
 
@@ -222,6 +263,27 @@ export default function ProductsPage() {
                 <button onClick={() => rename(p)}>Renommer</button>
                 <button onClick={() => changePrice(p)}>Prix</button>
                 <button onClick={() => changeSlug(p)}>Image</button>
+                <input
+                  value={uploadNames[p.id] ?? ""}
+                  onChange={(e) =>
+                    setUploadNames((prev) => ({ ...prev, [p.id]: e.target.value }))
+                  }
+                  placeholder="Nom upload (png)"
+                  style={{ padding: 8, minWidth: 150 }}
+                />
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ opacity: 0.8 }}>PNG</span>
+                  <input
+                    type="file"
+                    accept="image/png"
+                    disabled={uploadBusyId === p.id}
+                    onChange={async (e) => {
+                      const file = e.currentTarget.files?.[0] ?? null;
+                      e.currentTarget.value = "";
+                      await uploadProductImage(p, file);
+                    }}
+                  />
+                </label>
                 <button onClick={() => toggleActive(p)}>
                   {p.is_active === 1 ? "Desactiver" : "Activer"}
                 </button>

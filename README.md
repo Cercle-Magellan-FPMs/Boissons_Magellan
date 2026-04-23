@@ -177,6 +177,10 @@ Products:
 - `POST /api/admin/products`
 - `PATCH /api/admin/products/:id`
 - `POST /api/admin/products/:id/price`
+- `POST /api/admin/products/:id/image-upload`
+  - Uploads a product image as PNG only
+  - Requires `upload_name` and `image_base64`
+  - Saves file as `<normalized-upload-name>.png` and updates product image slug
 - `DELETE /api/admin/products/:id`
   - Soft-deletes a product from the admin/kiosk lists while preserving history
 - `POST /api/admin/products/:id/delete`
@@ -307,7 +311,7 @@ Main files:
 - `admin/src/App.tsx`: main layout and page navigation
 - `admin/src/lib/api.ts`: fetch wrapper adding `x-admin-token`
 - `admin/src/lib/types.ts`: shared frontend types
-- `admin/src/pages/ProductsPage.tsx`: product listing, creation, rename, price updates, activation, image slug
+- `admin/src/pages/ProductsPage.tsx`: product listing, creation, rename, price updates, activation, image slug, and PNG upload with custom upload name
 - `admin/src/pages/RestockPage.tsx`: stock input form and correction/restock submission, with CSV import/export for stock list
 - `admin/src/pages/DebtsPage.tsx`: close period and manage debt payment state
 - `admin/src/pages/TopupsLogPage.tsx`: top-up log with date/method/user filters
@@ -428,6 +432,7 @@ Relevant backend environment variables:
 - `DB_PATH`
 - `ADMIN_TOKEN`
 - `PRODUCT_SLUG_PATH`
+- `PRODUCT_IMAGES_DIR`
 - `SMTP_HOST`
 - `SMTP_PORT`
 - `SMTP_SECURE`

@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "crypto";
+import fs from "fs";
+import path from "path";
 import { getDB } from "../../db/db.js";
 import { loadProductSlugs, normalizeSlug, setProductSlug } from "../../lib/productSlug.js";
 import { requireAdmin } from "./_auth.js";
@@ -75,6 +77,31 @@ function parseCsv(text: string): string[][] {
   }
 
   return rows;
+}
+
+const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+
+function resolveProductImagesDir() {
+  if (process.env.PRODUCT_IMAGES_DIR?.trim()) {
+    return path.resolve(process.env.PRODUCT_IMAGES_DIR.trim());
+  }
+  const repoDir = path.resolve(process.cwd(), "../kiosk/public/products");
+  if (fs.existsSync(repoDir)) return repoDir;
+  return "/var/www/boissons/kiosk/products";
+}
+
+function decodePngPayload(input: string) {
+  const value = input.trim();
+  const prefix = "data:image/png;base64,";
+  const base64 = value.startsWith(prefix) ? value.slice(prefix.length) : value;
+  const buffer = Buffer.from(base64, "base64");
+  if (buffer.length < PNG_SIGNATURE.length) {
+    throw new Error("PNG invalide: fichier trop court");
+  }
+  if (!buffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
+    throw new Error("PNG invalide: signature incorrecte");
+  }
+  return buffer;
 }
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -279,6 +306,62 @@ export async function adminRoutes(app: FastifyInstance) {
     }
 
     return reply.send({ ok: true });
+  });
+
+  app.post("/api/admin/products/:id/image-upload", async (req, reply) => {
+    try { requireAdmin(req); } catch (e: any) { return reply.code(e.statusCode ?? 500).send({ error: e.message }); }
+
+    const paramsSchema = z.object({ id: z.coerce.number().int().positive() });
+    const bodySchema = z.object({
+      upload_name: z.string().min(1),
+      image_base64: z.string().min(1),
+      overwrite: z.boolean().optional().default(false),
+    });
+
+    const p = paramsSchema.safeParse(req.params);
+    const b = bodySchema.safeParse(req.body);
+    if (!p.success || !b.success) return reply.code(400).send({ error: "Invalid payload" });
+
+    const productId = p.data.id;
+    const uploadName = b.data.upload_name.trim();
+    const slug = normalizeSlug(uploadName);
+    if (!slug) return reply.code(400).send({ error: "Nom upload invalide" });
+
+    let imageBuffer: Buffer;
+    try {
+      imageBuffer = decodePngPayload(b.data.image_base64);
+    } catch (error: unknown) {
+      return reply.code(400).send({ error: String((error as Error)?.message ?? error) });
+    }
+
+    if (imageBuffer.length > 5 * 1024 * 1024) {
+      return reply.code(413).send({ error: "PNG trop volumineux (max 5MB)" });
+    }
+
+    const db = getDB();
+    const product = db.prepare(`
+      SELECT id
+      FROM products
+      WHERE id = ?
+        AND deleted_at IS NULL
+    `).get(productId);
+    if (!product) return reply.code(404).send({ error: "Product not found" });
+
+    const imagesDir = resolveProductImagesDir();
+    fs.mkdirSync(imagesDir, { recursive: true });
+    const targetPath = path.join(imagesDir, `${slug}.png`);
+    if (!b.data.overwrite && fs.existsSync(targetPath)) {
+      return reply.code(409).send({ error: "Un fichier PNG avec ce nom existe déjà" });
+    }
+
+    try {
+      fs.writeFileSync(targetPath, imageBuffer);
+      setProductSlug(productId, slug);
+      return reply.send({ ok: true, image_slug: slug, path: targetPath });
+    } catch (error: unknown) {
+      req.log.error({ error }, "product image upload failed");
+      return reply.code(500).send({ error: "Impossible d'enregistrer l'image PNG" });
+    }
   });
 
   // --- RESTOCK ---
