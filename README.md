@@ -1,5 +1,28 @@
 # Boissons Magellan
 
+## AI / LLM Read First
+
+If you are an AI/LLM/model, start here to get context fast:
+
+1. Read this file sections in order:
+   - `Project Overview for AI / LLM`
+   - `Repository Structure`
+   - `Backend API`
+   - `Database Structure`
+2. Then open:
+   - `ARCHITECTURE.md`
+   - `docs/api.md`
+   - `docs/data-model.md`
+   - `docs/adr/`
+3. For runtime behavior, prioritize:
+   - `backend/src/index.ts` (entry point)
+   - `backend/src/routes/order.ts` (standard checkout)
+   - `backend/src/routes/qrCode.ts` (QR flow)
+   - `kiosk/src/App.tsx` (kiosk flow)
+   - `admin/src/App.tsx` (admin routing)
+4. For schema truth, use:
+   - `backend/src/db/migrations/*.sql`
+
 Boissons Magellan is a small drink-selling system for the Cercle Magellan. It is designed around an RFID kiosk where a user scans a badge, selects drinks, and the purchase is paid immediately from their prepaid balance. A separate admin interface is used to manage products, stock, users, balances, and debt-closing operations for legacy unpaid periods.
 
 The repository is split into 3 main applications:
