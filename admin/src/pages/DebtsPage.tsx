@@ -14,6 +14,14 @@ type DebtRow = {
   paid_at: string | null;
 };
 
+type LastClosedPeriod = {
+  id: string;
+  start_ts: string;
+  end_ts: string;
+  comment: string | null;
+  created_at: string;
+};
+
 function euros(cents: number) {
   return (cents / 100).toFixed(2) + " EUR";
 }
@@ -29,6 +37,7 @@ export default function DebtsPage() {
   const [statusFilter, setStatusFilter] = useState<"invoiced" | "paid">("invoiced");
   const [nameFilter, setNameFilter] = useState("");
   const [debts, setDebts] = useState<DebtRow[]>([]);
+  const [lastPeriod, setLastPeriod] = useState<LastClosedPeriod | null>(null);
   const [msg, setMsg] = useState("");
 
   async function closePeriodAction() {
@@ -64,9 +73,12 @@ export default function DebtsPage() {
     try {
       const data = await api<{ debts: DebtRow[] }>(`/api/admin/debts?${qs.toString()}`);
       setDebts(data.debts);
+      const last = await api<{ period: LastClosedPeriod | null }>("/api/admin/close-period/last");
+      setLastPeriod(last.period);
     } catch (e: any) {
       setMsg("Erreur: " + e.message);
       setDebts([]);
+      setLastPeriod(null);
     }
   }
 
@@ -114,6 +126,15 @@ export default function DebtsPage() {
         <p style={{ opacity: 0.7, marginTop: 0 }}>
           La clôture prend la période depuis la dernière clôture jusqu'à maintenant.
         </p>
+        <div style={{ marginBottom: 10, opacity: 0.85 }}>
+          {lastPeriod ? (
+            <span>
+              Dernière clôture: <b>{lastPeriod.end_ts}</b> | commentaire: <b>{lastPeriod.comment || "--"}</b>
+            </span>
+          ) : (
+            <span>Aucune clôture enregistrée pour le moment.</span>
+          )}
+        </div>
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <input

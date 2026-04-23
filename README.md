@@ -317,6 +317,8 @@ Debts:
 
 Closing operations:
 
+- `GET /api/admin/close-period/last`
+  - Returns the latest closed period metadata (`start_ts`, `end_ts`, `comment`, `created_at`)
 - `POST /api/admin/close-period`
   - Closes everything since the last billing period and creates `period_debts`
   - `comment` is mandatory

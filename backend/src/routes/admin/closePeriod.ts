@@ -10,6 +10,28 @@ function eurosFromCents(cents: number) {
 }
 
 export async function adminClosePeriodRoutes(app: FastifyInstance) {
+  app.get("/api/admin/close-period/last", async (req, reply) => {
+    try { requireAdmin(req); } catch (e: any) {
+      return reply.code(e.statusCode ?? 500).send({ error: e.message });
+    }
+
+    const db = getDB();
+    const last = db.prepare(`
+      SELECT id, start_ts, end_ts, comment, created_at
+      FROM billing_periods
+      ORDER BY end_ts DESC
+      LIMIT 1
+    `).get() as {
+      id: string;
+      start_ts: string;
+      end_ts: string;
+      comment: string | null;
+      created_at: string;
+    } | undefined;
+
+    return reply.send({ period: last ?? null });
+  });
+
   app.post("/api/admin/close-period", async (req, reply) => {
     try { requireAdmin(req); } catch (e: any) {
       return reply.code(e.statusCode ?? 500).send({ error: e.message });
