@@ -1,0 +1,63 @@
+import QRCode from "qrcode";
+
+function buildEpcPayload({
+  name,
+  iban,
+  bic = "",
+  amount,
+  remittance = "",
+  charset = "1",
+}) {
+  if (!name || !iban) {
+    throw new Error("Le nom du bénéficiaire et l'IBAN sont obligatoires.");
+  }
+
+  const cleanName = name.trim();
+  const cleanIban = iban.replace(/\s+/g, "").toUpperCase();
+  const cleanBic = bic.trim().toUpperCase();
+  const cleanRemittance = remittance.trim();
+
+  let amountLine = "";
+  if (amount !== undefined && amount !== null && amount !== "") {
+    const value = Number(amount);
+    if (!Number.isFinite(value) || value < 0) {
+      throw new Error("Montant invalide.");
+    }
+    amountLine = `EUR${value.toFixed(2)}`;
+  }
+
+  const lines = [
+    "BCD",
+    "002",
+    charset,
+    "SCT",
+    cleanBic,
+    cleanName,
+    cleanIban,
+    amountLine,
+    "",
+    cleanRemittance,
+  ];
+
+  return lines.join("\n");
+}
+
+async function renderQr() {
+  const payload = buildEpcPayload({
+    name: "Cercle Magellan",
+    iban: "BE70751211827125",
+    bic: "NICABEBBXXX",
+    amount: 5.00,
+    remittance: "Boisson",
+  });
+
+  console.log(payload);
+
+  await QRCode.toCanvas(document.getElementById("epcQr"), payload, {
+    errorCorrectionLevel: "M",
+    margin: 2,
+    width: 256,
+  });
+}
+
+renderQr().catch(console.error);

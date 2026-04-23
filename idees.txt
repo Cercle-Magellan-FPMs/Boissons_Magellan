@@ -1,0 +1,14 @@
+pour admin, rester sur la même page même avec reload
+
+pour admin, pouvoir exporter et importer en CSV la liste des utilisateurs avec toutes les infos
+
+pour admin, ajouter un état "accès au local" binaire (True or False)
+
+pour admin, pouvoir exporter et importer en CSV les stocks théoriques
+
+pour admin, uploader des images pour les boissons
+
+pour la cloture de période, envoie un email avec toutes les consommations de la période à tous les utilisateurs
+
+pour kiosk, intégrer "payer par QR Code" via API (EPC v2), généré en local si possible
+<img src="https://qrcode.tec-it.com/API/QRCode?data=BCD%0a002%0a1%0aSCT%0aNICABEBBXXX%0aCercle+Magellan%0aBE70751211827125%0a%0a%0aTEXTPLACEHOLDER&errorcorrection=M&backcolor=%23ffffff" />
