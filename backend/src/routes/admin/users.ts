@@ -298,13 +298,12 @@ export async function adminUserRoutes(app: FastifyInstance) {
           SELECT id
           FROM users
           WHERE id = ?
-            AND deleted_at IS NULL
         `).get(record.id) as { id: number } | undefined;
 
         if (existing) {
           db.prepare(`
             UPDATE users
-            SET name = ?, email = ?, is_active = ?, balance_cents = ?, rfid_uid = ?
+            SET name = ?, email = ?, is_active = ?, balance_cents = ?, rfid_uid = ?, deleted_at = NULL
             WHERE id = ?
           `).run(
             record.name,
