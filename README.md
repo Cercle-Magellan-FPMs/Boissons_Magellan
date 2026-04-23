@@ -12,6 +12,16 @@ Mandatory Codex working rules are defined in `CODEX_RULES.md`.
 
 An Ubuntu host deployment path based on `systemd` and host `nginx` is included for production use.
 
+## Mandatory Codex Workflow
+
+Every Codex agent working on this repository must follow `CODEX_RULES.md`:
+
+- work from `/opt/boissons/Boissons_Magellan` and read this README first
+- update `README.md` in the same session for every major functional change
+- run and keep migrations aligned with schema changes
+- verify changes, push the branch to GitHub, and restart `boissons-backend.service` after deployment-related work
+- validate and reload/restart nginx when nginx configuration changes
+
 ## What The Project Does
 
 Main workflow:
