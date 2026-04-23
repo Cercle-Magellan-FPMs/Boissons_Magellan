@@ -268,8 +268,9 @@ export default function App() {
       }
 
       setBadgeRequestForm({ name: "", email: "", uid: "" });
-      setBadgeRequestMessage("Demande envoyée. Le badge fonctionnera après validation par le comité.");
+      setBadgeRequestMessage("");
       setStatus("Demande de badge envoyée. Le comité doit la valider.");
+      setBadgeRequestOpen(false);
     } catch {
       setBadgeRequestError("Impossible d'envoyer la demande pour le moment.");
     } finally {
