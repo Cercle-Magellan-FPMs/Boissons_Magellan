@@ -17,3 +17,8 @@ backend/data/
 Thumbs.db
 .vscode/
 .idea/
+
+# Generated artifacts
+backend/src/**/*.js
+backend/src/**/*.d.ts
+backend/src/**/*.map
