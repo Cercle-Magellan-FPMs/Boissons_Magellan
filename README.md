@@ -441,6 +441,7 @@ Relevant backend environment variables:
 - `SMTP_FROM`
 
 The SMTP variables can be edited from the admin `Email` page. They are stored in `backend/.env`; the password is write-only from the UI and is not returned by the API.
+When `PRODUCT_IMAGES_DIR` is not set, product PNG uploads are saved to `/var/www/boissons/kiosk/products` when that folder exists.
 
 ### Required migration step
 

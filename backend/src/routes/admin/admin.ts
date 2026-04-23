@@ -85,9 +85,9 @@ function resolveProductImagesDir() {
   if (process.env.PRODUCT_IMAGES_DIR?.trim()) {
     return path.resolve(process.env.PRODUCT_IMAGES_DIR.trim());
   }
-  const repoDir = path.resolve(process.cwd(), "../kiosk/public/products");
-  if (fs.existsSync(repoDir)) return repoDir;
-  return "/var/www/boissons/kiosk/products";
+  const servedDir = "/var/www/boissons/kiosk/products";
+  if (fs.existsSync(servedDir)) return servedDir;
+  return path.resolve(process.cwd(), "../kiosk/public/products");
 }
 
 function decodePngPayload(input: string) {
