@@ -13,6 +13,7 @@ type DebtSummary = {
   items: DebtItem[];
 };
 type BadgeRequestForm = { name: string; email: string; uid: string };
+type AccountDetailDialog = "confirm" | "success" | null;
 
 const insufficientBalanceMessage =
   "Solde insuffisant, merci de faire un virement au compte suivant : BE70 7512 1182 7125";
@@ -48,6 +49,9 @@ export default function App() {
   const [blockedModal, setBlockedModal] = useState<{ title: string; message: string } | null>(null);
   const [paymentErrorModal, setPaymentErrorModal] = useState<string | null>(null);
   const [debtModalOpen, setDebtModalOpen] = useState(false);
+  const [accountDetailDialog, setAccountDetailDialog] = useState<AccountDetailDialog>(null);
+  const [accountDetailError, setAccountDetailError] = useState("");
+  const [accountDetailSubmitting, setAccountDetailSubmitting] = useState(false);
   const [badgeRequestOpen, setBadgeRequestOpen] = useState(false);
   const [badgeRequestForm, setBadgeRequestForm] = useState<BadgeRequestForm>({ name: "", email: "", uid: "" });
   const [badgeRequestMessage, setBadgeRequestMessage] = useState("");
@@ -65,7 +69,7 @@ export default function App() {
   const scanTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (badgeRequestOpen) return;
+    if (badgeRequestOpen || accountDetailDialog) return;
     const focus = () => inputRef.current?.focus();
     focus();
     window.addEventListener("click", focus);
@@ -74,7 +78,7 @@ export default function App() {
       window.removeEventListener("click", focus);
       window.clearInterval(interval);
     };
-  }, [badgeRequestOpen]);
+  }, [badgeRequestOpen, accountDetailDialog]);
 
   function showBlockedModal(name?: string) {
     const baseMessage =
@@ -89,6 +93,7 @@ export default function App() {
     setCheckoutMessage("");
     setPaymentErrorModal(null);
     setDebtModalOpen(false);
+    setAccountDetailDialog(null);
     setScreen("badge");
     setStatus("Pas de badge ? Contactez le comité.");
   }
@@ -331,6 +336,7 @@ export default function App() {
       setCheckoutMessage("");
       setPaymentErrorModal(null);
       setDebtModalOpen(false);
+      setAccountDetailDialog(null);
       setStatus("Pas de badge ? Contactez le comité.");
       setScreen("badge");
     }, 3000);
@@ -338,21 +344,40 @@ export default function App() {
 
   async function requestAccountDetail() {
     if (!user) return;
+    setAccountDetailError("");
+    setAccountDetailDialog("confirm");
+  }
+
+  async function sendAccountDetail() {
+    if (!user) return;
     setStatus("Envoi de votre détail par email...");
+    setAccountDetailError("");
+    setAccountDetailSubmitting(true);
 
-    const res = await fetch("/api/kiosk/account-detail/request", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: user.id }),
-    });
+    try {
+      const res = await fetch("/api/kiosk/account-detail/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: user.id }),
+      });
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      setStatus(err.error || `Erreur (${res.status})`);
-      return;
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const message = err.error || `Erreur (${res.status})`;
+        setAccountDetailError(message);
+        setStatus(message);
+        return;
+      }
+
+      setStatus(`Détail envoyé à ${user.email ?? "votre adresse email"}.`);
+      setAccountDetailDialog("success");
+    } catch {
+      const message = "Impossible d'envoyer le détail pour le moment.";
+      setAccountDetailError(message);
+      setStatus(message);
+    } finally {
+      setAccountDetailSubmitting(false);
     }
-
-    setStatus(`Détail envoyé à ${user.email ?? "votre adresse email"}.`);
   }
 
   return (
@@ -420,6 +445,7 @@ export default function App() {
                     setCheckoutMessage("");
                     setPaymentErrorModal(null);
                     setDebtModalOpen(false);
+                    setAccountDetailDialog(null);
                     setStatus("Pas de badge ? Contactez le comité.");
                   }}
                 >
@@ -579,6 +605,54 @@ export default function App() {
           </section>
         )}
       </main>
+      {accountDetailDialog && user && (
+        <div className="account-detail-backdrop" role="dialog" aria-modal="true">
+          <div className="account-detail-modal">
+            {accountDetailDialog === "confirm" ? (
+              <>
+                <h2>Envoyer votre détail ?</h2>
+                <p>
+                  Nous allons envoyer vos top-ups et consommations à{" "}
+                  <strong>{user.email ?? "votre adresse email"}</strong>.
+                </p>
+                {accountDetailError && <p className="account-detail-error">{accountDetailError}</p>}
+                <div className="account-detail-actions">
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => setAccountDetailDialog(null)}
+                    disabled={accountDetailSubmitting}
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={sendAccountDetail}
+                    disabled={accountDetailSubmitting}
+                  >
+                    {accountDetailSubmitting ? "Envoi..." : "Confirmer l'envoi"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2>Email envoyé</h2>
+                <p>Votre détail a bien été envoyé à {user.email ?? "votre adresse email"}.</p>
+                <div className="account-detail-actions">
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={() => setAccountDetailDialog(null)}
+                  >
+                    OK
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
       {badgeRequestOpen && (
         <div className="badge-request-backdrop" role="dialog" aria-modal="true">
           <form className="badge-request-modal" onSubmit={submitBadgeRequest}>

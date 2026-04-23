@@ -526,6 +526,57 @@
   font-weight: 800;
 }
 
+.account-detail-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 12, 15, 0.88);
+  display: grid;
+  place-items: center;
+  z-index: 62;
+  padding: 16px;
+}
+
+.account-detail-modal {
+  width: min(600px, 92vw);
+  border-radius: 24px;
+  padding: 30px;
+  background: linear-gradient(160deg, rgba(14, 48, 54, 0.98), rgba(7, 18, 21, 0.98));
+  border: 1px solid rgba(68, 226, 210, 0.55);
+  box-shadow: 0 30px 80px rgba(2, 28, 32, 0.75);
+  text-align: center;
+  animation: float-in 220ms ease-out;
+}
+
+.account-detail-modal h2 {
+  margin: 0 0 10px;
+  font-size: clamp(1.5rem, 3.4vw, 2.2rem);
+}
+
+.account-detail-modal p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1.45;
+}
+
+.account-detail-modal strong {
+  color: var(--text);
+}
+
+.account-detail-error {
+  margin-top: 12px !important;
+  color: #ffb39a !important;
+  font-weight: 800;
+}
+
+.account-detail-actions {
+  margin-top: 22px;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
 .badge-request-backdrop {
   position: fixed;
   inset: 0;

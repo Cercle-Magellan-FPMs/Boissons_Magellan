@@ -159,6 +159,7 @@ Registered route groups:
 - `POST /api/kiosk/account-detail/request`
   - Sends account detail by email for the identified user
   - Email contains all top-ups and all consumptions
+  - Kiosk asks for confirmation before sending and confirms success after the email is sent
 
 - `POST /api/kiosk/badge-request`
   - Creates a pending badge/account request from the kiosk
