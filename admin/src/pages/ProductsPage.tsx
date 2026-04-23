@@ -11,7 +11,6 @@ export default function ProductsPage() {
   const [newName, setNewName] = useState("");
   const [newPrice, setNewPrice] = useState<number>();
   const [newQty, setNewQty] = useState<number>();
-  const [newSlug, setNewSlug] = useState("");
   const [uploadBusyId, setUploadBusyId] = useState<number | null>(null);
 
   async function load() {
@@ -63,21 +62,6 @@ export default function ProductsPage() {
       await api(`/api/admin/products/${p.id}/price`, {
         method: "POST",
         body: JSON.stringify({ price_cents: value }),
-      });
-      await load();
-    } catch (e: any) {
-      alert(e.message);
-    }
-  }
-
-  async function changeSlug(p: AdminProduct) {
-    const current = p.image_slug ?? "";
-    const slug = prompt("Slug image (ex: coca-zero)", current);
-    if (slug == null) return;
-    try {
-      await api("/api/admin/products/" + p.id, {
-        method: "PATCH",
-        body: JSON.stringify({ image_slug: slug.trim() }),
       });
       await load();
     } catch (e: any) {
@@ -138,13 +122,11 @@ export default function ProductsPage() {
           price_cents: newPrice,
           initial_qty: newQty,
           is_active: true,
-          image_slug: newSlug.trim() || undefined,
         }),
       });
       setNewName("");
       setNewPrice(0);
       setNewQty(0);
-      setNewSlug("");
       await load();
     } catch (e: any) {
       alert(e.message);
@@ -185,13 +167,6 @@ export default function ProductsPage() {
             placeholder="stock initial"
             style={{ padding: 8, width: 110 }}
           />
-          <p>Slug image :</p> 
-          <input
-            value={newSlug}
-            onChange={(e) => setNewSlug(e.target.value)}
-            placeholder="Ex: coca-zero"
-            style={{ padding: 8, minWidth: 150 }}
-          />
           <button onClick={addProduct} style={{ fontWeight: 800 }}>Ajouter</button>
         </div>
       </div>
@@ -221,7 +196,7 @@ export default function ProductsPage() {
               key={p.id}
               style={{
                 display: "grid",
-                gridTemplateColumns: "2fr 1fr 1fr 1fr auto",
+                gridTemplateColumns: "2fr 1fr 1fr auto",
                 gap: 8,
                 alignItems: "center",
                 padding: 10,
@@ -245,15 +220,9 @@ export default function ProductsPage() {
                 <div style={{ opacity: 0.7 }}>Stock</div>
               </div>
 
-              <div>
-              <div style={{ fontWeight: 800 }}>{p.image_slug || "--"}</div>
-                <div style={{ opacity: 0.7 }}>Slug image</div>
-              </div>
-
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
                 <button onClick={() => rename(p)}>Renommer</button>
                 <button onClick={() => changePrice(p)}>Prix</button>
-                <button onClick={() => changeSlug(p)}>Image</button>
                 <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                   <span style={{ opacity: 0.8 }}>PNG</span>
                   <input
