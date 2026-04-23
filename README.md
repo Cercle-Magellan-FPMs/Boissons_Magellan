@@ -179,8 +179,9 @@ Products:
 - `POST /api/admin/products/:id/price`
 - `POST /api/admin/products/:id/image-upload`
   - Uploads a product image as PNG only
-  - Requires `upload_name` and `image_base64`
-  - Saves file as `<normalized-upload-name>.png` and updates product image slug
+  - Requires `image_base64` only
+  - Upload is automatically bound to the selected product
+  - Backend generates a unique product-based filename and updates product image slug (cache-busting friendly)
 - `DELETE /api/admin/products/:id`
   - Soft-deletes a product from the admin/kiosk lists while preserving history
 - `POST /api/admin/products/:id/delete`

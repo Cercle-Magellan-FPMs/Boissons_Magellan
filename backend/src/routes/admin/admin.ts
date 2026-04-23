@@ -313,9 +313,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const paramsSchema = z.object({ id: z.coerce.number().int().positive() });
     const bodySchema = z.object({
-      upload_name: z.string().min(1),
       image_base64: z.string().min(1),
-      overwrite: z.boolean().optional().default(false),
     });
 
     const p = paramsSchema.safeParse(req.params);
@@ -323,9 +321,7 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!p.success || !b.success) return reply.code(400).send({ error: "Invalid payload" });
 
     const productId = p.data.id;
-    const uploadName = b.data.upload_name.trim();
-    const slug = normalizeSlug(uploadName);
-    if (!slug) return reply.code(400).send({ error: "Nom upload invalide" });
+    const slug = `product-${productId}-${Date.now()}`;
 
     let imageBuffer: Buffer;
     try {
@@ -350,13 +346,16 @@ export async function adminRoutes(app: FastifyInstance) {
     const imagesDir = resolveProductImagesDir();
     fs.mkdirSync(imagesDir, { recursive: true });
     const targetPath = path.join(imagesDir, `${slug}.png`);
-    if (!b.data.overwrite && fs.existsSync(targetPath)) {
-      return reply.code(409).send({ error: "Un fichier PNG avec ce nom existe déjà" });
-    }
+
+    const previousSlug = loadProductSlugs()[String(productId)] ?? null;
+    const previousPath = previousSlug ? path.join(imagesDir, `${previousSlug}.png`) : null;
 
     try {
       fs.writeFileSync(targetPath, imageBuffer);
       setProductSlug(productId, slug);
+      if (previousPath && previousPath !== targetPath && fs.existsSync(previousPath)) {
+        fs.unlinkSync(previousPath);
+      }
       return reply.send({ ok: true, image_slug: slug, path: targetPath });
     } catch (error: unknown) {
       req.log.error({ error }, "product image upload failed");

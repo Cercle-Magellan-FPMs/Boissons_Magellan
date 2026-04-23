@@ -12,7 +12,6 @@ export default function ProductsPage() {
   const [newPrice, setNewPrice] = useState<number>();
   const [newQty, setNewQty] = useState<number>();
   const [newSlug, setNewSlug] = useState("");
-  const [uploadNames, setUploadNames] = useState<Record<number, string>>({});
   const [uploadBusyId, setUploadBusyId] = useState<number | null>(null);
 
   async function load() {
@@ -86,16 +85,10 @@ export default function ProductsPage() {
     }
   }
 
-  async function uploadProductImage(p: AdminProduct, file: File | null, overwrite = false) {
+  async function uploadProductImage(p: AdminProduct, file: File | null) {
     if (!file) return;
     if (file.type !== "image/png" && !file.name.toLowerCase().endsWith(".png")) {
       alert("Seuls les fichiers PNG sont autorisés.");
-      return;
-    }
-
-    const uploadName = (uploadNames[p.id] ?? "").trim();
-    if (!uploadName) {
-      alert("Donnez un nom à l'upload avant d'envoyer le fichier.");
       return;
     }
 
@@ -111,31 +104,13 @@ export default function ProductsPage() {
       await api(`/api/admin/products/${p.id}/image-upload`, {
         method: "POST",
         body: JSON.stringify({
-          upload_name: uploadName,
           image_base64,
-          overwrite,
         }),
       });
 
-      setUploadNames((prev) => ({ ...prev, [p.id]: "" }));
       await load();
     } catch (e: any) {
-      const message = String(e?.message ?? "");
-      const isConflict =
-        message.toLowerCase().includes("existe déjà") ||
-        message.toLowerCase().includes("already exists");
-
-      if (!overwrite && isConflict) {
-        const confirmOverwrite = confirm(
-          `Un fichier PNG avec ce nom existe déjà (${uploadName}.png). Voulez-vous l'écraser ?`
-        );
-        if (confirmOverwrite) {
-          await uploadProductImage(p, file, true);
-          return;
-        }
-      }
-
-      alert(message || "Erreur upload image");
+      alert(String(e?.message ?? "Erreur upload image"));
     } finally {
       setUploadBusyId(null);
     }
@@ -279,14 +254,6 @@ export default function ProductsPage() {
                 <button onClick={() => rename(p)}>Renommer</button>
                 <button onClick={() => changePrice(p)}>Prix</button>
                 <button onClick={() => changeSlug(p)}>Image</button>
-                <input
-                  value={uploadNames[p.id] ?? ""}
-                  onChange={(e) =>
-                    setUploadNames((prev) => ({ ...prev, [p.id]: e.target.value }))
-                  }
-                  placeholder="Nom upload (png)"
-                  style={{ padding: 8, minWidth: 150 }}
-                />
                 <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                   <span style={{ opacity: 0.8 }}>PNG</span>
                   <input
