@@ -149,6 +149,7 @@ Registered route groups:
   - Rejects the order if the user balance would go below `0`
   - Insufficient balance message returned by API:
     - `Solde insuffisant, merci de faire un virement au compte suivant : BE70 7512 1182 7125`
+  - The kiosk checkout displays that message directly in the cart when a logged-in user submits an order without enough balance.
   - Decrements stock, debits the user balance, and writes stock/account movement rows
 
 - `POST /api/kiosk/account-detail/request`

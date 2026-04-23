@@ -13,6 +13,9 @@ type DebtSummary = {
   items: DebtItem[];
 };
 
+const insufficientBalanceMessage =
+  "Solde insuffisant, merci de faire un virement au compte suivant : BE70 7512 1182 7125";
+
 const badgeCharMap: Record<string, string> = {
   "à": "0",
   "&": "1",
@@ -46,6 +49,7 @@ export default function App() {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<Cart>({});
+  const [checkoutMessage, setCheckoutMessage] = useState("");
   const [debt, setDebt] = useState<DebtSummary | null>(null);
   const [debtError, setDebtError] = useState("");
   const [imageErrors, setImageErrors] = useState<Record<string, true>>({});
@@ -74,6 +78,7 @@ export default function App() {
     setUser(null);
     setProducts([]);
     setCart({});
+    setCheckoutMessage("");
     setDebtModalOpen(false);
     setScreen("badge");
     setStatus("Pas de badge ? Contactez le comité.");
@@ -103,7 +108,11 @@ export default function App() {
         setStatus("Solde insuffisant. Rechargez votre compte avant de commander.");
         return;
       }
-      setStatus(err.error || `Erreur (${res.status})`);
+      const message = res.status === 409
+        ? insufficientBalanceMessage
+        : (err.error || `Erreur (${res.status})`);
+      setCheckoutMessage(message);
+      setStatus(message);
       return;
     }
 
@@ -113,6 +122,7 @@ export default function App() {
 
     await loadProducts();
     setCart({});
+    setCheckoutMessage("");
     setScreen("products");
   }
 
@@ -187,10 +197,12 @@ export default function App() {
       setStatus("Produit indisponible.");
       return;
     }
+    setCheckoutMessage("");
     setCart((c) => ({ ...c, [productId]: (c[productId] || 0) + 1 }));
   }
 
   function removeFromCart(productId: number) {
+    setCheckoutMessage("");
     setCart((c) => {
       const next = { ...c };
       const q = next[productId] || 0;
@@ -245,6 +257,7 @@ export default function App() {
       setUser(null);
       setProducts([]);
       setCart({});
+      setCheckoutMessage("");
       setDebtModalOpen(false);
       setStatus("Pas de badge ? Contactez le comité.");
       setScreen("badge");
@@ -329,6 +342,7 @@ export default function App() {
                     setScreen("badge");
                     setUser(null);
                     setCart({});
+                    setCheckoutMessage("");
                     setDebtModalOpen(false);
                     setStatus("Pas de badge ? Contactez le comité.");
                   }}
@@ -411,6 +425,12 @@ export default function App() {
                       <span>Total</span>
                       <span>{euros(totalCents)}</span>
                     </div>
+
+                    {checkoutMessage && (
+                      <p className="checkout-message" role="alert">
+                        {checkoutMessage}
+                      </p>
+                    )}
 
                     <button className="primary-button" onClick={submitOrder}>
                       Valider la commande
