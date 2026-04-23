@@ -539,6 +539,8 @@ Legacy / secondary tables still present:
 ├── ops/
 │   ├── backup/
 │   │   └── boissons-backup.sh
+│   ├── reset/
+│   │   └── reset-boissons-data.sh
 │   └── vm/
 │       └── deploy-host.sh
 ├── docs/
@@ -606,6 +608,17 @@ From `kiosk/` or `admin/`:
 From the repository root:
 
 - `sudo ops/vm/deploy-host.sh`
+
+### Maintenance reset script
+
+- Script: `ops/reset/reset-boissons-data.sh`
+- Purpose:
+  - reset stocks (`stock_current` to `0`, `stock_moves` cleared)
+  - reset top-ups (`account_transactions` rows with `reason='topup'`, and remove their effect from `users.balance_cents`)
+  - reset period/debt tables (`billing_periods`, `period_debts`, `monthly_debts`, `debt_mail_log`)
+- Usage:
+  - default DB: `ops/reset/reset-boissons-data.sh`
+  - explicit DB path: `ops/reset/reset-boissons-data.sh /var/lib/boissons/app.db`
 
 ## Notes
 
