@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { api } from "../lib/api";
+import { api, getAdminToken } from "../lib/api";
 import type { AdminProduct } from "../lib/types";
 
 type Line = { product_id: number; qty: number };
@@ -10,6 +10,7 @@ export default function RestockPage() {
   const [searches, setSearches] = useState<string[]>([""]);
   const [comment, setComment] = useState("");
   const [msg, setMsg] = useState("");
+  const [csvBusy, setCsvBusy] = useState(false);
 
   async function loadProducts() {
     const data = await api<{ products: AdminProduct[] }>("/api/admin/products");
@@ -92,6 +93,80 @@ export default function RestockPage() {
     }
   }
 
+  async function exportStocksCsv() {
+    setCsvBusy(true);
+    try {
+      const res = await fetch("/api/admin/stocks/export.csv", {
+        headers: {
+          "x-admin-token": getAdminToken(),
+        },
+      });
+      if (!res.ok) {
+        let errorMsg = `Erreur (${res.status})`;
+        try {
+          const body = await res.json();
+          errorMsg = body?.error || body?.message || errorMsg;
+        } catch {}
+        throw new Error(errorMsg);
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `stocks-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setMsg("Erreur export CSV: " + e.message);
+    } finally {
+      setCsvBusy(false);
+    }
+  }
+
+  async function importStocksCsv(file: File) {
+    setCsvBusy(true);
+    setMsg("");
+    try {
+      const csv = await file.text();
+      const result = await api<{
+        ok: true;
+        updated: number;
+        unchanged: number;
+        failed: number;
+        errors: Array<{ line: number; error: string }>;
+      }>("/api/admin/stocks/import", {
+        method: "POST",
+        body: JSON.stringify({
+          csv,
+          comment: comment.trim() || "import csv stocks",
+        }),
+      });
+
+      await loadProducts();
+      const firstErrors = result.errors.slice(0, 5)
+        .map((item) => `Ligne ${item.line}: ${item.error}`)
+        .join(" | ");
+      setMsg(
+        [
+          `Import stocks terminé.`,
+          `MAJ: ${result.updated}`,
+          `inchangés: ${result.unchanged}`,
+          `erreurs: ${result.failed}`,
+          firstErrors ? `Détails: ${firstErrors}` : "",
+        ]
+          .filter(Boolean)
+          .join(" ")
+      );
+    } catch (e: any) {
+      setMsg("Erreur import CSV: " + e.message);
+    } finally {
+      setCsvBusy(false);
+    }
+  }
+
 
   return (
     <section style={{ display: "grid", gap: 12 }}>
@@ -99,6 +174,26 @@ export default function RestockPage() {
 
       <div style={{ padding: 12, border: "1px solid #333", borderRadius: 12 }}>
         <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <button onClick={exportStocksCsv} disabled={csvBusy}>
+              Exporter stocks CSV
+            </button>
+            <label style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+              <span>Importer CSV :</span>
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                disabled={csvBusy}
+                onChange={async (e) => {
+                  const file = e.currentTarget.files?.[0];
+                  e.currentTarget.value = "";
+                  if (!file) return;
+                  await importStocksCsv(file);
+                }}
+              />
+            </label>
+          </div>
+
           {lines.map((l, i) => {
             const product = products.find(p => p.id === l.product_id);
             const stockQty = product?.qty ?? 0;
@@ -214,4 +309,3 @@ export default function RestockPage() {
     </section>
   );
 }
-

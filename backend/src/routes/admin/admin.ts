@@ -5,6 +5,78 @@ import { getDB } from "../../db/db.js";
 import { loadProductSlugs, normalizeSlug, setProductSlug } from "../../lib/productSlug.js";
 import { requireAdmin } from "./_auth.js";
 
+function csvEscape(value: string) {
+  if (/[",\n\r]/.test(value)) {
+    return `"${value.replace(/"/g, "\"\"")}"`;
+  }
+  return value;
+}
+
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let i = 0;
+  let inQuotes = false;
+
+  while (i < text.length) {
+    const char = text[i];
+
+    if (inQuotes) {
+      if (char === "\"") {
+        if (text[i + 1] === "\"") {
+          field += "\"";
+          i += 2;
+          continue;
+        }
+        inQuotes = false;
+        i += 1;
+        continue;
+      }
+      field += char;
+      i += 1;
+      continue;
+    }
+
+    if (char === "\"") {
+      inQuotes = true;
+      i += 1;
+      continue;
+    }
+
+    if (char === ",") {
+      row.push(field);
+      field = "";
+      i += 1;
+      continue;
+    }
+
+    if (char === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+      i += 1;
+      continue;
+    }
+
+    if (char === "\r") {
+      i += 1;
+      continue;
+    }
+
+    field += char;
+    i += 1;
+  }
+
+  if (field.length > 0 || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+
+  return rows;
+}
+
 export async function adminRoutes(app: FastifyInstance) {
   async function softDeleteProduct(id: number) {
     const db = getDB();
@@ -210,6 +282,157 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   // --- RESTOCK ---
+
+  app.get("/api/admin/stocks/export.csv", async (req, reply) => {
+    try { requireAdmin(req); } catch (e: any) { return reply.code(e.statusCode ?? 500).send({ error: e.message }); }
+
+    const db = getDB();
+    const rows = db.prepare(`
+      SELECT
+        p.id AS product_id,
+        p.name AS product_name,
+        COALESCE(sc.qty, 0) AS qty,
+        p.is_active
+      FROM products p
+      LEFT JOIN stock_current sc ON sc.product_id = p.id
+      WHERE p.deleted_at IS NULL
+      ORDER BY p.name ASC
+    `).all() as Array<{
+      product_id: number;
+      product_name: string;
+      qty: number;
+      is_active: number;
+    }>;
+
+    const lines = [
+      "product_id,product_name,qty,is_active",
+      ...rows.map((row) => [
+        String(row.product_id),
+        csvEscape(row.product_name),
+        String(Number(row.qty ?? 0)),
+        String(Number(row.is_active ?? 0)),
+      ].join(",")),
+    ];
+
+    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    reply.header("Content-Type", "text/csv; charset=utf-8");
+    reply.header("Content-Disposition", `attachment; filename=\"stocks-${stamp}.csv\"`);
+    return reply.send(lines.join("\n"));
+  });
+
+  app.post("/api/admin/stocks/import", async (req, reply) => {
+    try { requireAdmin(req); } catch (e: any) { return reply.code(e.statusCode ?? 500).send({ error: e.message }); }
+
+    const bodySchema = z.object({
+      csv: z.string().min(1),
+      comment: z.string().optional(),
+    });
+    const parsed = bodySchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "Invalid payload" });
+
+    const rows = parseCsv(parsed.data.csv);
+    if (rows.length < 2) return reply.code(400).send({ error: "CSV vide ou incomplet" });
+
+    const header = (rows[0] ?? []).map((value) => value.trim().toLowerCase());
+    if (!header.includes("qty")) return reply.code(400).send({ error: "Colonne obligatoire manquante: qty" });
+    if (!header.includes("product_id") && !header.includes("product_name")) {
+      return reply.code(400).send({ error: "Colonne obligatoire manquante: product_id ou product_name" });
+    }
+
+    const db = getDB();
+    const counters = { updated: 0, unchanged: 0, failed: 0 };
+    const errors: Array<{ line: number; error: string }> = [];
+
+    const tx = db.transaction(() => {
+      const moveId = randomUUID();
+      const ensureStockRow = db.prepare(`INSERT OR IGNORE INTO stock_current (product_id, qty) VALUES (?, 0)`);
+      const readQty = db.prepare(`SELECT COALESCE(qty, 0) AS qty FROM stock_current WHERE product_id = ?`);
+      const updateStock = db.prepare(`UPDATE stock_current SET qty = ? WHERE product_id = ?`);
+      const insertMove = db.prepare(`
+        INSERT INTO stock_moves (move_id, product_id, delta_qty, reason, ref_id, comment)
+        VALUES (?, ?, ?, ?, NULL, ?)
+      `);
+
+      for (let index = 1; index < rows.length; index += 1) {
+        const lineNumber = index + 1;
+        const row = rows[index] ?? [];
+        const record: Record<string, string> = {};
+        header.forEach((key, colIdx) => {
+          record[key] = String(row[colIdx] ?? "").trim();
+        });
+
+        if (Object.values(record).every((value) => value === "")) {
+          counters.unchanged += 1;
+          continue;
+        }
+
+        try {
+          const targetQty = Number(record.qty);
+          if (!Number.isFinite(targetQty) || !Number.isInteger(targetQty)) {
+            throw new Error("qty invalide");
+          }
+
+          let product: { id: number; name: string } | undefined;
+          if (record.product_id) {
+            const productId = Number(record.product_id);
+            if (!Number.isFinite(productId) || !Number.isInteger(productId) || productId <= 0) {
+              throw new Error("product_id invalide");
+            }
+            product = db.prepare(`
+              SELECT id, name
+              FROM products
+              WHERE id = ?
+                AND deleted_at IS NULL
+            `).get(productId) as { id: number; name: string } | undefined;
+          }
+
+          if (!product && record.product_name) {
+            product = db.prepare(`
+              SELECT id, name
+              FROM products
+              WHERE name = ?
+                AND deleted_at IS NULL
+            `).get(record.product_name) as { id: number; name: string } | undefined;
+          }
+
+          if (!product) throw new Error("Produit introuvable");
+
+          ensureStockRow.run(product.id);
+          const currentQtyRow = readQty.get(product.id) as { qty: number } | undefined;
+          const currentQty = Number(currentQtyRow?.qty ?? 0);
+          const delta = targetQty - currentQty;
+
+          if (delta === 0) {
+            counters.unchanged += 1;
+            continue;
+          }
+
+          updateStock.run(targetQty, product.id);
+          insertMove.run(
+            moveId,
+            product.id,
+            delta,
+            delta > 0 ? "restock" : "correction",
+            parsed.data.comment?.trim() || "import csv stocks"
+          );
+          counters.updated += 1;
+        } catch (error: unknown) {
+          counters.failed += 1;
+          errors.push({
+            line: lineNumber,
+            error: String((error as Error)?.message ?? error),
+          });
+        }
+      }
+    });
+
+    tx();
+    return reply.send({
+      ok: true,
+      ...counters,
+      errors,
+    });
+  });
 
   app.post("/api/admin/restock", async (req, reply) => {
     try { requireAdmin(req); } catch (e: any) { return reply.code(e.statusCode ?? 500).send({ error: e.message }); }

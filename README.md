@@ -185,6 +185,11 @@ Products:
 Stock / restock:
 
 - `POST /api/admin/restock`
+- `GET /api/admin/stocks/export.csv`
+  - Exports stock list as CSV (`product_id,product_name,qty,is_active`)
+- `POST /api/admin/stocks/import`
+  - Imports stock CSV payload `{ csv: string }`
+  - Applies CSV quantities as target stock values per product
 
 Debts:
 
@@ -303,7 +308,7 @@ Main files:
 - `admin/src/lib/api.ts`: fetch wrapper adding `x-admin-token`
 - `admin/src/lib/types.ts`: shared frontend types
 - `admin/src/pages/ProductsPage.tsx`: product listing, creation, rename, price updates, activation, image slug
-- `admin/src/pages/RestockPage.tsx`: stock input form and correction/restock submission
+- `admin/src/pages/RestockPage.tsx`: stock input form and correction/restock submission, with CSV import/export for stock list
 - `admin/src/pages/DebtsPage.tsx`: close period and manage debt payment state
 - `admin/src/pages/TopupsLogPage.tsx`: top-up log with date/method/user filters
 - `admin/src/pages/UsersPage.tsx`: user creation, email editing, activation, local-access toggle/listing, rename, multi-badge management, balance top-up, CSV import/export, and user removal
