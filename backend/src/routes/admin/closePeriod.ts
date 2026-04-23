@@ -89,7 +89,6 @@ export async function adminClosePeriodRoutes(app: FastifyInstance) {
       WHERE o.status = 'committed'
         AND o.ts >= ?
         AND o.ts < ?
-        AND u.deleted_at IS NULL
       ORDER BY u.name ASC
     `).all(start_ts, end) as Array<{ id: number; name: string; email: string | null }>;
 

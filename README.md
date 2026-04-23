@@ -211,6 +211,7 @@ Closing operations:
   - Closes everything since the last billing period and creates `period_debts`
   - Sends each concerned user an email extract with consumption details for the closed period
   - Email is sent even when the period debt is `0` (for example, prepaid consumptions)
+  - Email sending does not filter out disabled users
   - Response includes mail delivery summary (`mail.sent`, `mail.skipped`, `mail.failed`)
 
 - `POST /api/admin/close-month`
