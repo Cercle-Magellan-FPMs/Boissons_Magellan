@@ -28,6 +28,86 @@ function badgeExistsSql(candidateCount: number) {
   `;
 }
 
+function csvEscape(value: string) {
+  if (/[",\n\r]/.test(value)) {
+    return `"${value.replace(/"/g, "\"\"")}"`;
+  }
+  return value;
+}
+
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let i = 0;
+  let inQuotes = false;
+
+  while (i < text.length) {
+    const char = text[i];
+
+    if (inQuotes) {
+      if (char === "\"") {
+        if (text[i + 1] === "\"") {
+          field += "\"";
+          i += 2;
+          continue;
+        }
+        inQuotes = false;
+        i += 1;
+        continue;
+      }
+      field += char;
+      i += 1;
+      continue;
+    }
+
+    if (char === "\"") {
+      inQuotes = true;
+      i += 1;
+      continue;
+    }
+
+    if (char === ",") {
+      row.push(field);
+      field = "";
+      i += 1;
+      continue;
+    }
+
+    if (char === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+      i += 1;
+      continue;
+    }
+
+    if (char === "\r") {
+      i += 1;
+      continue;
+    }
+
+    field += char;
+    i += 1;
+  }
+
+  if (field.length > 0 || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function parseBooleanFlag(value: string | undefined, fallback: number) {
+  if (!value) return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "y", "oui"].includes(normalized)) return 1;
+  if (["0", "false", "no", "n", "non"].includes(normalized)) return 0;
+  return fallback;
+}
+
 export async function adminUserRoutes(app: FastifyInstance) {
   const paymentDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
   const paymentMethodSchema = z.enum(["bank_transfer", "cash"]);
@@ -95,6 +175,261 @@ export async function adminUserRoutes(app: FastifyInstance) {
           .filter(Boolean),
       })),
     };
+  });
+
+  app.get("/api/admin/users/export.csv", async (req, reply) => {
+    try { requireAdmin(req); } catch (e: any) {
+      return reply.code(e.statusCode ?? 500).send({ error: e.message });
+    }
+
+    const db = getDB();
+    const rows = db.prepare(`
+      SELECT
+        u.id,
+        u.name,
+        u.email,
+        u.is_active,
+        u.balance_cents,
+        u.rfid_uid,
+        u.created_at,
+        u.deleted_at,
+        COALESCE((
+          SELECT GROUP_CONCAT(uid, '|')
+          FROM (
+            SELECT DISTINCT ub.uid AS uid
+            FROM user_badges ub
+            WHERE ub.user_id = u.id
+            ORDER BY ub.created_at ASC, ub.id ASC
+          )
+        ), '') AS badge_uids
+      FROM users u
+      WHERE u.deleted_at IS NULL
+      ORDER BY u.name ASC
+    `).all() as Array<{
+      id: number;
+      name: string;
+      email: string | null;
+      is_active: number;
+      balance_cents: number;
+      rfid_uid: string | null;
+      created_at: string;
+      deleted_at: string | null;
+      badge_uids: string;
+    }>;
+
+    const headers = [
+      "id",
+      "name",
+      "email",
+      "is_active",
+      "balance_cents",
+      "rfid_uid",
+      "badge_uids",
+      "created_at",
+      "deleted_at",
+    ];
+
+    const lines = [headers.join(",")];
+    for (const row of rows) {
+      lines.push([
+        String(row.id),
+        csvEscape(row.name ?? ""),
+        csvEscape(row.email ?? ""),
+        String(Number(row.is_active ?? 0)),
+        String(Number(row.balance_cents ?? 0)),
+        csvEscape(row.rfid_uid ?? ""),
+        csvEscape(row.badge_uids ?? ""),
+        csvEscape(row.created_at ?? ""),
+        csvEscape(row.deleted_at ?? ""),
+      ].join(","));
+    }
+
+    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    reply.header("Content-Type", "text/csv; charset=utf-8");
+    reply.header("Content-Disposition", `attachment; filename=\"users-${stamp}.csv\"`);
+    return reply.send(lines.join("\n"));
+  });
+
+  app.post("/api/admin/users/import", async (req, reply) => {
+    try { requireAdmin(req); } catch (e: any) {
+      return reply.code(e.statusCode ?? 500).send({ error: e.message });
+    }
+
+    const body = z.object({
+      csv: z.string().min(1),
+    }).safeParse(req.body);
+
+    if (!body.success) {
+      return reply.code(400).send({ error: "Invalid payload" });
+    }
+
+    const rows = parseCsv(body.data.csv);
+    if (rows.length < 2) {
+      return reply.code(400).send({ error: "CSV vide ou incomplet" });
+    }
+
+    const headerRow = rows[0] ?? [];
+    const header = headerRow.map((value) => value.trim().toLowerCase());
+    const requiredColumns = ["name", "email"];
+    for (const col of requiredColumns) {
+      if (!header.includes(col)) {
+        return reply.code(400).send({ error: `Colonne obligatoire manquante: ${col}` });
+      }
+    }
+
+    const db = getDB();
+    const counters = { created: 0, updated: 0, skipped: 0 };
+    const errors: Array<{ line: number; error: string }> = [];
+
+    const createUserTx = db.transaction((record: {
+      id?: number;
+      name: string;
+      email: string;
+      is_active: number;
+      balance_cents: number;
+      rfid_uid: string | null;
+      badge_uids: string[];
+    }) => {
+      let userId: number;
+      let mode: "created" | "updated";
+
+      if (record.id) {
+        const existing = db.prepare(`
+          SELECT id
+          FROM users
+          WHERE id = ?
+            AND deleted_at IS NULL
+        `).get(record.id) as { id: number } | undefined;
+
+        if (existing) {
+          db.prepare(`
+            UPDATE users
+            SET name = ?, email = ?, is_active = ?, balance_cents = ?, rfid_uid = ?
+            WHERE id = ?
+          `).run(
+            record.name,
+            record.email,
+            record.is_active,
+            record.balance_cents,
+            record.rfid_uid,
+            existing.id
+          );
+          userId = existing.id;
+          mode = "updated";
+        } else {
+          const inserted = db.prepare(`
+            INSERT INTO users (id, name, email, rfid_uid, is_active, balance_cents)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).run(
+            record.id,
+            record.name,
+            record.email,
+            record.rfid_uid,
+            record.is_active,
+            record.balance_cents
+          );
+          userId = Number(inserted.lastInsertRowid);
+          mode = "created";
+        }
+      } else {
+        const inserted = db.prepare(`
+          INSERT INTO users (name, email, rfid_uid, is_active, balance_cents)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(
+          record.name,
+          record.email,
+          record.rfid_uid,
+          record.is_active,
+          record.balance_cents
+        );
+        userId = Number(inserted.lastInsertRowid);
+        mode = "created";
+      }
+
+      db.prepare(`DELETE FROM user_badges WHERE user_id = ?`).run(userId);
+      for (const uid of record.badge_uids) {
+        db.prepare(`
+          INSERT INTO user_badges (user_id, uid)
+          VALUES (?, ?)
+        `).run(userId, uid);
+      }
+
+      if (!record.rfid_uid && record.badge_uids.length > 0) {
+        db.prepare(`UPDATE users SET rfid_uid = ? WHERE id = ?`).run(record.badge_uids[0], userId);
+      }
+
+      return mode;
+    });
+
+    const parseEmail = z.string().email();
+
+    for (let index = 1; index < rows.length; index += 1) {
+      const lineNumber = index + 1;
+      const row = rows[index] ?? [];
+      const record: Record<string, string> = {};
+      header.forEach((key, colIdx) => {
+        record[key] = String(row[colIdx] ?? "").trim();
+      });
+
+      if (Object.values(record).every((value) => value === "")) {
+        counters.skipped += 1;
+        continue;
+      }
+
+      try {
+        const name = record.name?.trim() ?? "";
+        const email = parseEmail.parse(record.email?.trim() ?? "");
+        if (!name) throw new Error("Nom manquant");
+
+        const id = record.id ? Number(record.id) : undefined;
+        if (id !== undefined && (!Number.isInteger(id) || id <= 0)) {
+          throw new Error("id invalide");
+        }
+
+        const is_active = parseBooleanFlag(record.is_active, 1);
+
+        const balance_cents = record.balance_cents ? Number(record.balance_cents) : 0;
+        if (!Number.isFinite(balance_cents) || !Number.isInteger(balance_cents)) {
+          throw new Error("balance_cents invalide");
+        }
+
+        const normalizedRfid = record.rfid_uid ? normUid(record.rfid_uid) : null;
+        const importedBadges = (record.badge_uids ?? "")
+          .split("|")
+          .map((value) => value.trim())
+          .filter(Boolean)
+          .map((value) => normUid(value));
+
+        const badgeSet = new Set(importedBadges);
+        if (normalizedRfid) badgeSet.add(normalizedRfid);
+        const badge_uids = Array.from(badgeSet);
+
+        const payload = {
+          ...(id !== undefined ? { id } : {}),
+          name,
+          email,
+          is_active,
+          balance_cents,
+          rfid_uid: normalizedRfid,
+          badge_uids,
+        };
+
+        const result = createUserTx(payload);
+
+        if (result === "created") counters.created += 1;
+        if (result === "updated") counters.updated += 1;
+      } catch (error: unknown) {
+        const message = String((error as Error)?.message ?? error);
+        errors.push({ line: lineNumber, error: message });
+      }
+    }
+
+    return reply.send({
+      ok: true,
+      ...counters,
+      failed: errors.length,
+      errors,
+    });
   });
 
   // CREATE USER

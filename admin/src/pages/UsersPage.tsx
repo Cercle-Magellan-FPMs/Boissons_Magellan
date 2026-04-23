@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api } from "../lib/api";
+import { api, getAdminToken } from "../lib/api";
 import type { AdminUser } from "../lib/types";
 import { eurosFromCents } from "../lib/types";
 
@@ -32,6 +32,7 @@ export default function UsersPage() {
   const [topUpComment, setTopUpComment] = useState("");
   const [topUpPaymentDate, setTopUpPaymentDate] = useState(new Date().toISOString().slice(0, 10));
   const [topUpPaymentMethod, setTopUpPaymentMethod] = useState<"bank_transfer" | "cash">("bank_transfer");
+  const [csvBusy, setCsvBusy] = useState(false);
 
   async function load() {
     setError("");
@@ -234,6 +235,82 @@ export default function UsersPage() {
     }
   }
 
+  async function exportUsersCsv() {
+    setCsvBusy(true);
+    try {
+      const res = await fetch("/api/admin/users/export.csv", {
+        headers: {
+          "x-admin-token": getAdminToken(),
+        },
+      });
+      if (!res.ok) {
+        let errorMsg = `Erreur (${res.status})`;
+        try {
+          const body = await res.json();
+          errorMsg = body?.error || body?.message || errorMsg;
+        } catch {}
+        throw new Error(errorMsg);
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const fileName = `users-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setCsvBusy(false);
+    }
+  }
+
+  async function importUsersCsv(file: File) {
+    setCsvBusy(true);
+    try {
+      const csv = await file.text();
+      const result = await api<{
+        ok: true;
+        created: number;
+        updated: number;
+        skipped: number;
+        failed: number;
+        errors: Array<{ line: number; error: string }>;
+      }>("/api/admin/users/import", {
+        method: "POST",
+        body: JSON.stringify({ csv }),
+      });
+
+      await load();
+
+      const firstErrors = result.errors.slice(0, 5)
+        .map((item) => `Ligne ${item.line}: ${item.error}`)
+        .join("\n");
+      const extraErrorsCount = Math.max(0, result.errors.length - 5);
+      alert(
+        [
+          "Import terminé.",
+          `Créés: ${result.created}`,
+          `Mises à jour: ${result.updated}`,
+          `Ignorés: ${result.skipped}`,
+          `Erreurs: ${result.failed}`,
+          firstErrors,
+          extraErrorsCount > 0 ? `... et ${extraErrorsCount} erreur(s) supplémentaire(s)` : "",
+        ]
+          .filter(Boolean)
+          .join("\n")
+      );
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setCsvBusy(false);
+    }
+  }
+
   async function approveBadgeRequest(request: PendingBadgeRequest) {
     if (!confirm(`Créer le compte ${request.name} et activer le badge ${request.normalized_uid} ?`)) return;
     try {
@@ -341,6 +418,23 @@ export default function UsersPage() {
               value={nameFilter}
               onChange={(e) => setNameFilter(e.target.value)}
               placeholder="Raphaël aka best admin"
+            />
+          </label>
+          <button onClick={exportUsersCsv} disabled={csvBusy}>
+            Exporter CSV
+          </button>
+          <label style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+            <span>Importer CSV :</span>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              disabled={csvBusy}
+              onChange={async (e) => {
+                const file = e.currentTarget.files?.[0];
+                e.currentTarget.value = "";
+                if (!file) return;
+                await importUsersCsv(file);
+              }}
             />
           </label>
         </div>

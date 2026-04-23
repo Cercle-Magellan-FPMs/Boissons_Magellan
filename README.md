@@ -215,6 +215,13 @@ Users:
 - `POST /api/admin/users/:id/topup`
   - `comment` is mandatory
   - For positive top-ups, `payment_date` (`YYYY-MM-DD`) and `payment_method` (`bank_transfer` or `cash`) are mandatory
+- `GET /api/admin/users/export.csv`
+  - Exports current users list as CSV
+  - Includes: `id,name,email,is_active,balance_cents,rfid_uid,badge_uids,created_at,deleted_at`
+- `POST /api/admin/users/import`
+  - Imports users from CSV payload `{ csv: string }`
+  - Upserts by `id` when present, creates otherwise
+  - Replaces badge bindings for updated users
 - `DELETE /api/admin/users/:id`
   - Soft-deletes a user from the admin list while preserving history
 - `POST /api/admin/users/:id/delete`
@@ -299,7 +306,7 @@ Main files:
 - `admin/src/pages/RestockPage.tsx`: stock input form and correction/restock submission
 - `admin/src/pages/DebtsPage.tsx`: close period and manage debt payment state
 - `admin/src/pages/TopupsLogPage.tsx`: top-up log with date/method/user filters
-- `admin/src/pages/UsersPage.tsx`: user creation, email editing, activation, rename, multi-badge management, balance top-up, and user removal
+- `admin/src/pages/UsersPage.tsx`: user creation, email editing, activation, rename, multi-badge management, balance top-up, CSV import/export, and user removal
 - `admin/src/pages/EmailSettingsPage.tsx`: SMTP sender-account setup and test email
 
 ## Database Structure
