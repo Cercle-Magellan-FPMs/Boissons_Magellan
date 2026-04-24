@@ -1,14 +1,7 @@
-pour admin, rester sur la même page même avec reload
+afficher "Consommation du jour" dans le kiosk
 
-pour admin, pouvoir exporter et importer en CSV la liste des utilisateurs avec toutes les infos
+page d'accueil du kiosk, bouton pour QR Code valeur libre pour random qui veut une boisson
 
-pour admin, ajouter un état "accès au local" binaire (True or False)
+pour demander un compte, si le badge a été scanné ne pas laisser la possibilité de modifier son id
 
-pour admin, pouvoir exporter et importer en CSV les stocks théoriques
-
-pour admin, uploader des images pour les boissons
-
-pour la cloture de période, envoie un email avec toutes les consommations de la période à tous les utilisateurs
-
-pour kiosk, intégrer "payer par QR Code" via API (EPC v2), généré en local si possible
-<img src="https://qrcode.tec-it.com/API/QRCode?data=BCD%0a002%0a1%0aSCT%0aNICABEBBXXX%0aCercle+Magellan%0aBE70751211827125%0a%0a%0aTEXTPLACEHOLDER&errorcorrection=M&backcolor=%23ffffff" />
+la cloture génère toujours des dettes alors que tout est payé à l'avance/sur le moment
