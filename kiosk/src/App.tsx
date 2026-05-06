@@ -54,6 +54,7 @@ function normalizeBadgeUid(value: string) {
   return translated.replace(/[^0-9A-Z]/gi, "").toUpperCase();
 }
 
+const AUTO_BADGE_LOCK_THRESHOLD_MS = 1000;
 const badgeRequestFieldOrder: BadgeRequestField[] = ["name", "email", "uid"];
 const badgeRequestKeyboardRows = [
   ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
@@ -91,6 +92,7 @@ export default function App() {
   const [badgeRequestSubmitting, setBadgeRequestSubmitting] = useState(false);
   const [badgeRequestActiveField, setBadgeRequestActiveField] = useState<BadgeRequestField>("name");
   const [badgeRequestShift, setBadgeRequestShift] = useState(false);
+  const [badgeRequestUidLocked, setBadgeRequestUidLocked] = useState(false);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<Cart>({});
@@ -101,6 +103,7 @@ export default function App() {
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const scanTimeoutRef = useRef<number | null>(null);
+  const scanStartedAtRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (badgeRequestOpen || accountDetailDialog) return;
@@ -135,7 +138,7 @@ export default function App() {
     setStatus("Pas de badge ? Contactez le comité.");
   }
 
-  async function identify(uidRaw: string) {
+  async function identify(uidRaw: string, scanDurationMs?: number) {
     const uid = normalizeBadgeUid(uidRaw);
     if (!uid) {
       setStatus("Badge vide ou invalide.");
@@ -160,11 +163,19 @@ export default function App() {
         return;
       }
       if (res.status === 404) {
+        const lockScannedBadge = typeof scanDurationMs === "number" && scanDurationMs <= AUTO_BADGE_LOCK_THRESHOLD_MS;
         setBadgeRequestForm((current) => ({ ...current, uid }));
+        setBadgeRequestActiveField("name");
+        setBadgeRequestShift(false);
+        setBadgeRequestUidLocked(lockScannedBadge);
         setBadgeRequestMessage("");
         setBadgeRequestError("");
         setBadgeRequestOpen(true);
-        setStatus("Badge non reconnu. Remplissez le formulaire pour demander sa validation.");
+        setStatus(
+          lockScannedBadge
+            ? "Badge non reconnu. Le badge scanné est verrouillé, remplissez votre nom et email."
+            : "Badge non reconnu. Remplissez le formulaire pour demander sa validation."
+        );
         return;
       }
       const message = res.status === 409
@@ -225,12 +236,14 @@ export default function App() {
     if (e.key === "Enter") {
       e.preventDefault();
       const uid = e.currentTarget.value;
+      const scanDurationMs = scanStartedAtRef.current == null ? 0 : performance.now() - scanStartedAtRef.current;
       e.currentTarget.value = "";
+      scanStartedAtRef.current = null;
       if (scanTimeoutRef.current) {
         window.clearTimeout(scanTimeoutRef.current);
         scanTimeoutRef.current = null;
       }
-      if (uid) identify(uid);
+      if (uid) identify(uid, scanDurationMs);
       return;
     }
   }
@@ -243,14 +256,19 @@ export default function App() {
       setStatus("Collage désactivé. Utilisez uniquement le lecteur badge.");
       return;
     }
+    if (scanStartedAtRef.current == null && input.value) {
+      scanStartedAtRef.current = performance.now();
+    }
     if (scanTimeoutRef.current) {
       window.clearTimeout(scanTimeoutRef.current);
     }
     scanTimeoutRef.current = window.setTimeout(() => {
       const uid = input.value;
+      const scanDurationMs = scanStartedAtRef.current == null ? 0 : performance.now() - scanStartedAtRef.current;
       input.value = "";
+      scanStartedAtRef.current = null;
       scanTimeoutRef.current = null;
-      if (uid) identify(uid);
+      if (uid) identify(uid, scanDurationMs);
     }, 120);
   }
 
@@ -281,12 +299,14 @@ export default function App() {
     setBadgeRequestForm({ name: "", email: "", uid });
     setBadgeRequestActiveField(uid ? "name" : "uid");
     setBadgeRequestShift(false);
+    setBadgeRequestUidLocked(false);
     setBadgeRequestMessage("");
     setBadgeRequestError("");
     setBadgeRequestOpen(true);
   }
 
   function setBadgeRequestFieldValue(field: BadgeRequestField, value: string) {
+    if (field === "uid" && badgeRequestUidLocked) return;
     setBadgeRequestForm((current) => ({
       ...current,
       [field]: normalizeBadgeRequestFieldValue(field, value),
@@ -294,6 +314,7 @@ export default function App() {
   }
 
   function appendBadgeRequestText(text: string) {
+    if (badgeRequestActiveField === "uid" && badgeRequestUidLocked) return;
     setBadgeRequestForm((current) => {
       const next = current[badgeRequestActiveField] + text;
       return {
@@ -305,6 +326,7 @@ export default function App() {
   }
 
   function backspaceBadgeRequestField() {
+    if (badgeRequestActiveField === "uid" && badgeRequestUidLocked) return;
     setBadgeRequestForm((current) => {
       const next = current[badgeRequestActiveField].slice(0, -1);
       return {
@@ -315,6 +337,7 @@ export default function App() {
   }
 
   function clearBadgeRequestField() {
+    if (badgeRequestActiveField === "uid" && badgeRequestUidLocked) return;
     setBadgeRequestForm((current) => ({ ...current, [badgeRequestActiveField]: "" }));
   }
 
@@ -352,7 +375,7 @@ export default function App() {
           <button type="button" className="keyboard-key keyboard-extra-wide" onClick={() => appendBadgeRequestText(" ")} disabled={badgeRequestActiveField !== "name"}>
             Espace
           </button>
-          <button type="button" className="keyboard-key keyboard-wide" onClick={backspaceBadgeRequestField}>
+          <button type="button" className="keyboard-key keyboard-wide" onClick={backspaceBadgeRequestField} disabled={badgeRequestActiveField === "uid" && badgeRequestUidLocked}>
             Suppr
           </button>
         </div>
@@ -363,7 +386,7 @@ export default function App() {
           <button type="button" className="keyboard-key keyboard-wide" onClick={() => appendBadgeRequestText(".com")} disabled={badgeRequestActiveField !== "email"}>
             .com
           </button>
-          <button type="button" className="keyboard-key keyboard-wide" onClick={clearBadgeRequestField}>
+          <button type="button" className="keyboard-key keyboard-wide" onClick={clearBadgeRequestField} disabled={badgeRequestActiveField === "uid" && badgeRequestUidLocked}>
             Effacer
           </button>
           <button type="button" className="keyboard-key keyboard-wide" onClick={focusNextBadgeRequestField}>
@@ -919,8 +942,19 @@ export default function App() {
                 onChange={(e) => setBadgeRequestFieldValue("uid", e.target.value)}
                 placeholder="Scanner ou saisir le badge"
                 inputMode="none"
-                className={badgeRequestActiveField === "uid" ? "keyboard-target is-active" : "keyboard-target"}
+                readOnly={badgeRequestUidLocked}
+                aria-readonly={badgeRequestUidLocked}
+                className={[
+                  "keyboard-target",
+                  badgeRequestActiveField === "uid" ? "is-active" : "",
+                  badgeRequestUidLocked ? "is-locked" : "",
+                ].filter(Boolean).join(" ")}
               />
+              {badgeRequestUidLocked && (
+                <p className="badge-request-hint">
+                  Badge scanné automatiquement : ce champ est verrouillé.
+                </p>
+              )}
             </label>
 
             {badgeRequestError && <p className="badge-request-error">{badgeRequestError}</p>}
