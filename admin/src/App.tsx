@@ -8,9 +8,10 @@ import TopupsLogPage from "./pages/TopupsLogPage";
 import UsersPage from "./pages/UsersPage";
 import EmailSettingsPage from "./pages/EmailSettingsPage";
 import QrCodePage from "./pages/QrCodePage";
+import KioskTabletPage from "./pages/KioskTabletPage";
 
-type Page = "products" | "restock" | "debts" | "topups" | "users" | "qrcode" | "email";
-const PAGES: Page[] = ["products", "restock", "debts", "topups", "users", "qrcode", "email"];
+type Page = "products" | "restock" | "debts" | "topups" | "users" | "qrcode" | "kiosk-tablette" | "email";
+const PAGES: Page[] = ["products", "restock", "debts", "topups", "users", "qrcode", "kiosk-tablette", "email"];
 
 function normalizePage(value: string | null | undefined): Page | null {
   if (!value) return null;
@@ -137,6 +138,12 @@ export default function App() {
               QR Code
             </button>
             <button
+              className={`nav-button ${page === "kiosk-tablette" ? "active" : ""}`}
+              onClick={() => goTo("kiosk-tablette")}
+            >
+              Tablette
+            </button>
+            <button
               className={`nav-button ${page === "email" ? "active" : ""}`}
               onClick={() => goTo("email")}
             >
@@ -152,6 +159,7 @@ export default function App() {
           {page === "topups" && <TopupsLogPage />}
           {page === "users" && <UsersPage />}
           {page === "qrcode" && <QrCodePage />}
+          {page === "kiosk-tablette" && <KioskTabletPage />}
           {page === "email" && <EmailSettingsPage />}
         </main>
       </div>
