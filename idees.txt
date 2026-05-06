@@ -2,6 +2,4 @@ afficher "Consommation du jour" dans le kiosk
 
 page d'accueil du kiosk, bouton pour QR Code valeur libre pour random qui veut une boisson
 
-pour demander un compte, si le badge a été scanné ne pas laisser la possibilité de modifier son id
-
 la cloture génère toujours des dettes alors que tout est payé à l'avance/sur le moment
