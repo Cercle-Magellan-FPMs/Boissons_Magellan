@@ -13,6 +13,7 @@ type DebtSummary = {
   items: DebtItem[];
 };
 type BadgeRequestForm = { name: string; email: string; uid: string };
+type BadgeRequestField = keyof BadgeRequestForm;
 type AccountDetailDialog = "confirm" | "success" | null;
 type QrPaymentData = {
   unique_id: string;
@@ -53,6 +54,21 @@ function normalizeBadgeUid(value: string) {
   return translated.replace(/[^0-9A-Z]/gi, "").toUpperCase();
 }
 
+const badgeRequestFieldOrder: BadgeRequestField[] = ["name", "email", "uid"];
+const badgeRequestKeyboardRows = [
+  ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
+  ["a", "z", "e", "r", "t", "y", "u", "i", "o", "p"],
+  ["q", "s", "d", "f", "g", "h", "j", "k", "l", "m"],
+  ["w", "x", "c", "v", "b", "n", "é", "è", "à", "ç"],
+  ["'", "-", "_", ".", "@"],
+];
+
+function normalizeBadgeRequestFieldValue(field: BadgeRequestField, value: string) {
+  if (field === "uid") return normalizeBadgeUid(value);
+  if (field === "email") return value.replace(/\s+/g, "").toLowerCase();
+  return value.replace(/\s{2,}/g, " ");
+}
+
 export default function App() {
   const [screen, setScreen] = useState<"badge" | "products" | "thanks">("badge");
   const [status, setStatus] = useState("Pas de badge ? Contactez le comité.");
@@ -73,6 +89,8 @@ export default function App() {
   const [badgeRequestMessage, setBadgeRequestMessage] = useState("");
   const [badgeRequestError, setBadgeRequestError] = useState("");
   const [badgeRequestSubmitting, setBadgeRequestSubmitting] = useState(false);
+  const [badgeRequestActiveField, setBadgeRequestActiveField] = useState<BadgeRequestField>("name");
+  const [badgeRequestShift, setBadgeRequestShift] = useState(false);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<Cart>({});
@@ -261,9 +279,99 @@ export default function App() {
 
   function openBadgeRequestForm(uid = "") {
     setBadgeRequestForm({ name: "", email: "", uid });
+    setBadgeRequestActiveField(uid ? "name" : "uid");
+    setBadgeRequestShift(false);
     setBadgeRequestMessage("");
     setBadgeRequestError("");
     setBadgeRequestOpen(true);
+  }
+
+  function setBadgeRequestFieldValue(field: BadgeRequestField, value: string) {
+    setBadgeRequestForm((current) => ({
+      ...current,
+      [field]: normalizeBadgeRequestFieldValue(field, value),
+    }));
+  }
+
+  function appendBadgeRequestText(text: string) {
+    setBadgeRequestForm((current) => {
+      const next = current[badgeRequestActiveField] + text;
+      return {
+        ...current,
+        [badgeRequestActiveField]: normalizeBadgeRequestFieldValue(badgeRequestActiveField, next),
+      };
+    });
+    if (badgeRequestShift && /^[a-zéèàç]$/i.test(text)) setBadgeRequestShift(false);
+  }
+
+  function backspaceBadgeRequestField() {
+    setBadgeRequestForm((current) => {
+      const next = current[badgeRequestActiveField].slice(0, -1);
+      return {
+        ...current,
+        [badgeRequestActiveField]: normalizeBadgeRequestFieldValue(badgeRequestActiveField, next),
+      };
+    });
+  }
+
+  function clearBadgeRequestField() {
+    setBadgeRequestForm((current) => ({ ...current, [badgeRequestActiveField]: "" }));
+  }
+
+  function focusNextBadgeRequestField() {
+    const currentIndex = badgeRequestFieldOrder.indexOf(badgeRequestActiveField);
+    const nextField = badgeRequestFieldOrder[(currentIndex + 1) % badgeRequestFieldOrder.length];
+    setBadgeRequestActiveField(nextField);
+    setBadgeRequestShift(false);
+  }
+
+  function renderBadgeRequestKeyboard() {
+    return (
+      <div className="onscreen-keyboard" aria-label="Clavier virtuel">
+        {badgeRequestKeyboardRows.map((row, rowIndex) => (
+          <div className="keyboard-row" key={rowIndex}>
+            {row.map((key) => {
+              const label = badgeRequestShift && /^[a-zéèàç]$/.test(key) ? key.toUpperCase() : key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  className="keyboard-key"
+                  onClick={() => appendBadgeRequestText(label)}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+        <div className="keyboard-row keyboard-row-actions">
+          <button type="button" className={`keyboard-key keyboard-wide ${badgeRequestShift ? "is-active" : ""}`} onClick={() => setBadgeRequestShift((value) => !value)}>
+            Maj
+          </button>
+          <button type="button" className="keyboard-key keyboard-extra-wide" onClick={() => appendBadgeRequestText(" ")} disabled={badgeRequestActiveField !== "name"}>
+            Espace
+          </button>
+          <button type="button" className="keyboard-key keyboard-wide" onClick={backspaceBadgeRequestField}>
+            Suppr
+          </button>
+        </div>
+        <div className="keyboard-row keyboard-row-actions">
+          <button type="button" className="keyboard-key keyboard-wide" onClick={() => appendBadgeRequestText(".be")} disabled={badgeRequestActiveField !== "email"}>
+            .be
+          </button>
+          <button type="button" className="keyboard-key keyboard-wide" onClick={() => appendBadgeRequestText(".com")} disabled={badgeRequestActiveField !== "email"}>
+            .com
+          </button>
+          <button type="button" className="keyboard-key keyboard-wide" onClick={clearBadgeRequestField}>
+            Effacer
+          </button>
+          <button type="button" className="keyboard-key keyboard-wide" onClick={focusNextBadgeRequestField}>
+            Suivant
+          </button>
+        </div>
+      </div>
+    );
   }
 
   async function submitBadgeRequest(e: React.FormEvent<HTMLFormElement>) {
@@ -781,9 +889,12 @@ export default function App() {
               <span>Nom</span>
               <input
                 value={badgeRequestForm.name}
-                onChange={(e) => setBadgeRequestForm((current) => ({ ...current, name: e.target.value }))}
+                onFocus={() => setBadgeRequestActiveField("name")}
+                onChange={(e) => setBadgeRequestFieldValue("name", e.target.value)}
                 placeholder="Nom et prénom"
+                inputMode="none"
                 autoFocus
+                className={badgeRequestActiveField === "name" ? "keyboard-target is-active" : "keyboard-target"}
               />
             </label>
 
@@ -792,8 +903,11 @@ export default function App() {
               <input
                 type="email"
                 value={badgeRequestForm.email}
-                onChange={(e) => setBadgeRequestForm((current) => ({ ...current, email: e.target.value }))}
+                onFocus={() => setBadgeRequestActiveField("email")}
+                onChange={(e) => setBadgeRequestFieldValue("email", e.target.value)}
                 placeholder="prenom.nom@example.com"
+                inputMode="none"
+                className={badgeRequestActiveField === "email" ? "keyboard-target is-active" : "keyboard-target"}
               />
             </label>
 
@@ -801,13 +915,30 @@ export default function App() {
               <span>Badge</span>
               <input
                 value={badgeRequestForm.uid}
-                onChange={(e) => setBadgeRequestForm((current) => ({ ...current, uid: e.target.value }))}
+                onFocus={() => setBadgeRequestActiveField("uid")}
+                onChange={(e) => setBadgeRequestFieldValue("uid", e.target.value)}
                 placeholder="Scanner ou saisir le badge"
+                inputMode="none"
+                className={badgeRequestActiveField === "uid" ? "keyboard-target is-active" : "keyboard-target"}
               />
             </label>
 
             {badgeRequestError && <p className="badge-request-error">{badgeRequestError}</p>}
             {badgeRequestMessage && <p className="badge-request-success">{badgeRequestMessage}</p>}
+
+            <div className="keyboard-field-tabs" aria-label="Champ actif du clavier">
+              <button type="button" className={badgeRequestActiveField === "name" ? "is-active" : ""} onClick={() => setBadgeRequestActiveField("name")}>
+                Nom
+              </button>
+              <button type="button" className={badgeRequestActiveField === "email" ? "is-active" : ""} onClick={() => setBadgeRequestActiveField("email")}>
+                Email
+              </button>
+              <button type="button" className={badgeRequestActiveField === "uid" ? "is-active" : ""} onClick={() => setBadgeRequestActiveField("uid")}>
+                Badge
+              </button>
+            </div>
+
+            {renderBadgeRequestKeyboard()}
 
             <div className="badge-request-actions">
               <button
