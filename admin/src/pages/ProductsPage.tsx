@@ -4,249 +4,381 @@ import type { AdminProduct } from "../lib/types";
 import { eurosFromCents } from "../lib/types";
 
 export default function ProductsPage() {
-  const [products, setProducts] = useState<AdminProduct[]>([]);
-  const [error, setError] = useState<string>("");
-  const [nameFilter, setNameFilter] = useState("");
+    const [products, setProducts] = useState<AdminProduct[]>([]);
+    const [error, setError] = useState<string>("");
+    const [nameFilter, setNameFilter] = useState("");
 
-  const [newName, setNewName] = useState("");
-  const [newPrice, setNewPrice] = useState<number>();
-  const [newQty, setNewQty] = useState<number>();
-  const [uploadBusyId, setUploadBusyId] = useState<number | null>(null);
+    const [newName, setNewName] = useState("");
+    const [newPrice, setNewPrice] = useState<number>();
+    const [newQty, setNewQty] = useState<number>();
+    const [uploadBusyId, setUploadBusyId] = useState<number | null>(null);
 
-  async function load() {
-    setError("");
-    try {
-      const data = await api<{ products: AdminProduct[] }>("/api/admin/products");
-      setProducts(data.products);
-    } catch (e: any) {
-      setError(e.message);
-    }
-  }
-
-  useEffect(() => { load(); }, []);
-
-  async function toggleActive(p: AdminProduct) {
-    try {
-      await api("/api/admin/products/" + p.id, {
-        method: "PATCH",
-        body: JSON.stringify({ is_active: p.is_active !== 1 }),
-      });
-      await load();
-    } catch (e: any) {
-      alert(e.message);
-    }
-  }
-
-  async function rename(p: AdminProduct) {
-    const name = prompt("Nouveau nom", p.name);
-    if (!name) return;
-    try {
-      await api("/api/admin/products/" + p.id, {
-        method: "PATCH",
-        body: JSON.stringify({ name }),
-      });
-      await load();
-    } catch (e: any) {
-      alert(e.message);
-    }
-  }
-
-  async function changePrice(p: AdminProduct) {
-    const current = p.price_cents ?? 0;
-    const euros = prompt("Nouveau prix (en EUR)", (current / 100).toString());
-    if (euros == null) return;
-    const value = Math.round(Number(euros.replace(",", ".")) * 100);
-    if (!Number.isFinite(value) || value < 0) return alert("Prix invalide");
-
-    try {
-      await api(`/api/admin/products/${p.id}/price`, {
-        method: "POST",
-        body: JSON.stringify({ price_cents: value }),
-      });
-      await load();
-    } catch (e: any) {
-      alert(e.message);
-    }
-  }
-
-  async function uploadProductImage(p: AdminProduct, file: File | null) {
-    if (!file) return;
-    if (file.type !== "image/png" && !file.name.toLowerCase().endsWith(".png")) {
-      alert("Seuls les fichiers PNG sont autorisés.");
-      return;
+    async function load() {
+        setError("");
+        try {
+            const data = await api<{ products: AdminProduct[] }>(
+                "/api/admin/products",
+            );
+            setProducts(data.products);
+        } catch (e: any) {
+            setError(e.message);
+        }
     }
 
-    setUploadBusyId(p.id);
-    try {
-      const image_base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result ?? ""));
-        reader.onerror = () => reject(new Error("Impossible de lire le fichier"));
-        reader.readAsDataURL(file);
-      });
+    useEffect(() => {
+        load();
+    }, []);
 
-      await api(`/api/admin/products/${p.id}/image-upload`, {
-        method: "POST",
-        body: JSON.stringify({
-          image_base64,
-        }),
-      });
-
-      await load();
-    } catch (e: any) {
-      alert(String(e?.message ?? "Erreur upload image"));
-    } finally {
-      setUploadBusyId(null);
+    async function toggleActive(p: AdminProduct) {
+        try {
+            await api("/api/admin/products/" + p.id, {
+                method: "PATCH",
+                body: JSON.stringify({ is_active: p.is_active !== 1 }),
+            });
+            await load();
+        } catch (e: any) {
+            alert(e.message);
+        }
     }
-  }
 
-  async function removeProduct(p: AdminProduct) {
-    if (!confirm(`Supprimer "${p.name}" de la liste ?`)) return;
-    try {
-      await api(`/api/admin/products/${p.id}/delete`, {
-        method: "POST",
-      });
-      await load();
-    } catch (e: any) {
-      alert(e.message);
+    async function rename(p: AdminProduct) {
+        const name = prompt("Nouveau nom", p.name);
+        if (!name) return;
+        try {
+            await api("/api/admin/products/" + p.id, {
+                method: "PATCH",
+                body: JSON.stringify({ name }),
+            });
+            await load();
+        } catch (e: any) {
+            alert(e.message);
+        }
     }
-  }
 
-  async function addProduct() {
-    if (!newName.trim()) return;
-    try {
-      await api(`/api/admin/products`, {
-        method: "POST",
-        body: JSON.stringify({
-          name: newName.trim(),
-          price_cents: newPrice,
-          initial_qty: newQty,
-          is_active: true,
-        }),
-      });
-      setNewName("");
-      setNewPrice(0);
-      setNewQty(0);
-      await load();
-    } catch (e: any) {
-      alert(e.message);
+    async function changePrice(p: AdminProduct) {
+        const current = p.price_cents ?? 0;
+        const euros = prompt(
+            "Nouveau prix (en EUR)",
+            (current / 100).toString(),
+        );
+        if (euros == null) return;
+        const value = Math.round(Number(euros.replace(",", ".")) * 100);
+        if (!Number.isFinite(value) || value < 0) return alert("Prix invalide");
+
+        try {
+            await api(`/api/admin/products/${p.id}/price`, {
+                method: "POST",
+                body: JSON.stringify({ price_cents: value }),
+            });
+            await load();
+        } catch (e: any) {
+            alert(e.message);
+        }
     }
-  }
 
-  const filteredProducts = products.filter((p) =>
-    p.name.toLowerCase().includes(nameFilter.trim().toLowerCase())
-  );
+    async function uploadProductImage(p: AdminProduct, file: File | null) {
+        if (!file) return;
+        if (
+            file.type !== "image/png" &&
+            !file.name.toLowerCase().endsWith(".png")
+        ) {
+            alert("Seuls les fichiers PNG sont autorisés.");
+            return;
+        }
 
-  return (
-    <section style={{ display: "grid", gap: 12 }}>
-      <h2 style={{ margin: 0 }}>Produits</h2>
+        setUploadBusyId(p.id);
+        try {
+            const image_base64 = await new Promise<string>(
+                (resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(String(reader.result ?? ""));
+                    reader.onerror = () =>
+                        reject(new Error("Impossible de lire le fichier"));
+                    reader.readAsDataURL(file);
+                },
+            );
 
-      <div style={{ padding: 12, border: "1px solid #333", borderRadius: 12 }}>
-        <h3 style={{ marginTop: 0 }}>Ajouter un produit</h3>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Nom (ex: Sprite)"
-            style={{ padding: 8, minWidth: 150 }}
-          />
-          <p>Prix (en centimes) :</p>
-          <input
-            type="number"
-            value={newPrice}
-            onChange={(e) => setNewPrice(Number(e.target.value))}
-            placeholder="100 = 1€"
-            style={{ padding: 8, width: 110 }}
-          />
-          
-          <p>Quantité initiale :</p>
-          <input
-            type="number"
-            value={newQty}
-            onChange={(e) => setNewQty(Number(e.target.value))}
-            placeholder="stock initial"
-            style={{ padding: 8, width: 110 }}
-          />
-          <button onClick={addProduct} style={{ fontWeight: 800 }}>Ajouter</button>
-        </div>
-      </div>
+            await api(`/api/admin/products/${p.id}/image-upload`, {
+                method: "POST",
+                body: JSON.stringify({
+                    image_base64,
+                }),
+            });
 
-      <div style={{ padding: 12, border: "1px solid #333", borderRadius: 12 }}>
-        <h3 style={{ marginTop: 0 }}>Liste</h3>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
-            <label>
-              Rechercher : {" "}
-              <input
-                value={nameFilter}
-                onChange={(e) => setNameFilter(e.target.value)}
-                placeholder="Ex : Red Bull"
-              />
-            </label>
-          </div>
+            await load();
+        } catch (e: any) {
+            alert(String(e?.message ?? "Erreur upload image"));
+        } finally {
+            setUploadBusyId(null);
+        }
+    }
 
-        {error && (
-          <div style={{ padding: 10, border: "1px solid #a33", borderRadius: 10, marginBottom: 10 }}>
-            <b>Erreur :</b> {error}
-          </div>
-        )}
+    async function removeProduct(p: AdminProduct) {
+        if (!confirm(`Supprimer "${p.name}" de la liste ?`)) return;
+        try {
+            await api(`/api/admin/products/${p.id}/delete`, {
+                method: "POST",
+            });
+            await load();
+        } catch (e: any) {
+            alert(e.message);
+        }
+    }
 
-        <div style={{ display: "grid", gap: 8 }}>
-          {filteredProducts.map((p) => (
+    async function addProduct() {
+        if (!newName.trim()) return;
+        try {
+            await api(`/api/admin/products`, {
+                method: "POST",
+                body: JSON.stringify({
+                    name: newName.trim(),
+                    price_cents: newPrice,
+                    initial_qty: newQty,
+                    is_active: true,
+                }),
+            });
+            setNewName("");
+            setNewPrice(0);
+            setNewQty(0);
+            await load();
+        } catch (e: any) {
+            alert(e.message);
+        }
+    }
+
+    async function resetAllStock() {
+        const firstConfirm = confirm(
+            "⚠️ Es-tu sûr de vouloir remettre TOUT LE STOCK À ZÉRO ?\n\n" +
+                "Cette action va réinitialiser la quantité de tous les produits.",
+        );
+        if (!firstConfirm) return;
+
+        const secondConfirm = confirm(
+            "🚨 ATTENTION : Cette action est IRRÉVERSIBLE !\n\n" +
+                "Tout le stock va être mis à 0.\n" +
+                "Cette action sera enregistrée dans l'historique.\n\n" +
+                "Confirmer quand même ?",
+        );
+        if (!secondConfirm) return;
+
+        try {
+            const result = await api<{
+                ok: boolean;
+                reset_count: number;
+                message: string;
+            }>("/api/admin/products/reset-stock", {
+                method: "POST",
+                body: JSON.stringify({ confirm: true }),
+            });
+            alert(`✅ ${result.message}`);
+            await load();
+        } catch (e: any) {
+            alert("Erreur: " + e.message);
+        }
+    }
+
+    const filteredProducts = products.filter((p) =>
+        p.name.toLowerCase().includes(nameFilter.trim().toLowerCase()),
+    );
+
+    return (
+        <section style={{ display: "grid", gap: 12 }}>
+            <h2 style={{ margin: 0 }}>Produits</h2>
+
             <div
-              key={p.id}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "2fr 1fr 1fr auto",
-                gap: 8,
-                alignItems: "center",
-                padding: 10,
-                border: "1px solid #444",
-                borderRadius: 10,
-                opacity: p.is_active === 1 ? 1 : 0.55,
-              }}
+                style={{
+                    padding: 12,
+                    border: "1px solid #333",
+                    borderRadius: 12,
+                }}
             >
-              <div>
-                <div style={{ fontWeight: 900 }}>{p.name}</div>
-                <div style={{ opacity: 0.7 }}>ID: {p.id}</div>
-              </div>
-
-              <div>
-                <div style={{ fontWeight: 800 }}>{eurosFromCents(p.price_cents)}</div>
-                <div style={{ opacity: 0.7 }}>Prix actuel</div>
-              </div>
-
-              <div>
-                <div style={{ fontWeight: 800 }}>{p.qty}</div>
-                <div style={{ opacity: 0.7 }}>Stock</div>
-              </div>
-
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
-                <button onClick={() => rename(p)}>Renommer</button>
-                <button onClick={() => changePrice(p)}>Prix</button>
-                <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ opacity: 0.8 }}>PNG</span>
-                  <input
-                    type="file"
-                    accept="image/png"
-                    disabled={uploadBusyId === p.id}
-                    onChange={async (e) => {
-                      const file = e.currentTarget.files?.[0] ?? null;
-                      e.currentTarget.value = "";
-                      await uploadProductImage(p, file);
+                <h3 style={{ marginTop: 0 }}>Ajouter un produit</h3>
+                <div
+                    style={{
+                        display: "flex",
+                        gap: 8,
+                        flexWrap: "wrap",
+                        alignItems: "center",
                     }}
-                  />
-                </label>
-                <button onClick={() => toggleActive(p)}>
-                  {p.is_active === 1 ? "Desactiver" : "Activer"}
-                </button>
-                <button onClick={() => removeProduct(p)}>Supprimer</button>
-              </div>
-            </div>
-          ))}
+                >
+                    <input
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                        placeholder="Nom (ex: Sprite)"
+                        style={{ padding: 8, minWidth: 150 }}
+                    />
+                    <p>Prix (en centimes) :</p>
+                    <input
+                        type="number"
+                        value={newPrice}
+                        onChange={(e) => setNewPrice(Number(e.target.value))}
+                        placeholder="100 = 1€"
+                        style={{ padding: 8, width: 110 }}
+                    />
 
-          {filteredProducts.length === 0 && <p style={{ opacity: 0.7 }}>Aucun produit.</p>}
-        </div>
-      </div>
-    </section>
-  );
+                    <p>Quantité initiale :</p>
+                    <input
+                        type="number"
+                        value={newQty}
+                        onChange={(e) => setNewQty(Number(e.target.value))}
+                        placeholder="stock initial"
+                        style={{ padding: 8, width: 110 }}
+                    />
+                    <button onClick={addProduct} style={{ fontWeight: 800 }}>
+                        Ajouter
+                    </button>
+                </div>
+            </div>
+
+            <div
+                style={{
+                    padding: 12,
+                    border: "1px solid #333",
+                    borderRadius: 12,
+                    marginBottom: 12,
+                }}
+            >
+                <h3 style={{ marginTop: 0 }}>⚠️ Zone dangereuse</h3>
+                <button
+                    onClick={resetAllStock}
+                    style={{
+                        padding: "10px 20px",
+                        fontWeight: 900,
+                        background: "#a33",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 8,
+                        cursor: "pointer",
+                    }}
+                >
+                    🗑️ Reset complet du stock (double confirmation)
+                </button>
+            </div>
+
+            <div
+                style={{
+                    padding: 12,
+                    border: "1px solid #333",
+                    borderRadius: 12,
+                }}
+            >
+                <h3 style={{ marginTop: 0 }}>Liste</h3>
+                <div
+                    style={{
+                        display: "flex",
+                        gap: 8,
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                        marginBottom: 10,
+                    }}
+                >
+                    <label>
+                        Rechercher :{" "}
+                        <input
+                            value={nameFilter}
+                            onChange={(e) => setNameFilter(e.target.value)}
+                            placeholder="Ex : Red Bull"
+                        />
+                    </label>
+                </div>
+
+                {error && (
+                    <div
+                        style={{
+                            padding: 10,
+                            border: "1px solid #a33",
+                            borderRadius: 10,
+                            marginBottom: 10,
+                        }}
+                    >
+                        <b>Erreur :</b> {error}
+                    </div>
+                )}
+
+                <div style={{ display: "grid", gap: 8 }}>
+                    {filteredProducts.map((p) => (
+                        <div
+                            key={p.id}
+                            style={{
+                                display: "grid",
+                                gridTemplateColumns: "2fr 1fr 1fr auto",
+                                gap: 8,
+                                alignItems: "center",
+                                padding: 10,
+                                border: "1px solid #444",
+                                borderRadius: 10,
+                                opacity: p.is_active === 1 ? 1 : 0.55,
+                            }}
+                        >
+                            <div>
+                                <div style={{ fontWeight: 900 }}>{p.name}</div>
+                                <div style={{ opacity: 0.7 }}>ID: {p.id}</div>
+                            </div>
+
+                            <div>
+                                <div style={{ fontWeight: 800 }}>
+                                    {eurosFromCents(p.price_cents)}
+                                </div>
+                                <div style={{ opacity: 0.7 }}>Prix actuel</div>
+                            </div>
+
+                            <div>
+                                <div style={{ fontWeight: 800 }}>{p.qty}</div>
+                                <div style={{ opacity: 0.7 }}>Stock</div>
+                            </div>
+
+                            <div
+                                style={{
+                                    display: "flex",
+                                    gap: 8,
+                                    justifyContent: "flex-end",
+                                    flexWrap: "wrap",
+                                }}
+                            >
+                                <button onClick={() => rename(p)}>
+                                    Renommer
+                                </button>
+                                <button onClick={() => changePrice(p)}>
+                                    Prix
+                                </button>
+                                <label
+                                    style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: 6,
+                                    }}
+                                >
+                                    <span style={{ opacity: 0.8 }}>PNG</span>
+                                    <input
+                                        type="file"
+                                        accept="image/png"
+                                        disabled={uploadBusyId === p.id}
+                                        onChange={async (e) => {
+                                            const file =
+                                                e.currentTarget.files?.[0] ??
+                                                null;
+                                            e.currentTarget.value = "";
+                                            await uploadProductImage(p, file);
+                                        }}
+                                    />
+                                </label>
+                                <button onClick={() => toggleActive(p)}>
+                                    {p.is_active === 1
+                                        ? "Desactiver"
+                                        : "Activer"}
+                                </button>
+                                <button onClick={() => removeProduct(p)}>
+                                    Supprimer
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+
+                    {filteredProducts.length === 0 && (
+                        <p style={{ opacity: 0.7 }}>Aucun produit.</p>
+                    )}
+                </div>
+            </div>
+        </section>
+    );
 }
