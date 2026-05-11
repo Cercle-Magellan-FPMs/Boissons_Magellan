@@ -129,6 +129,18 @@ export default function QrCodePage() {
     async function toggleStatus(row: QrRow) {
         const nextStatus =
             row.status === "verified" ? "unverified" : "verified";
+
+        // Double confirmation quand on passe en "vérifié"
+        if (nextStatus === "verified") {
+            const typeLabel = row.qr_type === "topup" ? "top-up" : "paiement";
+            if (!confirm(
+                `Confirmer le ${typeLabel} de ${row.user_name} pour ${euros(Number(row.amount_cents ?? 0))} ?`
+            )) return;
+            if (!confirm(
+                `ATTENTION : ${row.qr_type === "topup" ? "Le solde sera crédité sur le compte." : "Cette action est irréversible."}\n\nConfirmer ?`
+            )) return;
+        }
+
         try {
             await api<{ ok: true }>(`/api/admin/qr-code/${row.id}`, {
                 method: "PATCH",

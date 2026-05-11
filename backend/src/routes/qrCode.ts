@@ -694,6 +694,9 @@ export async function qrCodeRoutes(app: FastifyInstance) {
         if (!table)
             return reply.code(404).send({ error: "Paiement introuvable" });
 
+        // Get current status to prevent double-credit
+        const current = db.prepare(`SELECT status, user_id, amount_cents FROM ${table} WHERE id = ?`).get(params.data.id) as any;
+
         db.prepare(
             `
       UPDATE ${table}
@@ -702,6 +705,12 @@ export async function qrCodeRoutes(app: FastifyInstance) {
       WHERE id = ?
     `,
         ).run(body.data.status, body.data.status, params.data.id);
+
+        // Credit user balance for topup when verified (only if was unverified before)
+        if (table === 'topup_qr_requests' && body.data.status === 'verified' && current && current.status !== 'verified') {
+            db.prepare(`UPDATE users SET balance_cents = balance_cents + ? WHERE id = ?`)
+                .run(current.amount_cents, current.user_id);
+        }
 
         return reply.send({ ok: true });
     });

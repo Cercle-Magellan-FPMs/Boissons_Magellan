@@ -167,6 +167,10 @@ export async function kioskRoutes(app: FastifyInstance) {
                 .send({ error: "Guest user is disabled", user: dbUser });
         }
 
+        // Update the guest user's name in DB for QR code tracking
+        const displayName = `[GUEST] ${guestName}`;
+        db.prepare(`UPDATE users SET name = ? WHERE id = ?`).run(displayName, dbUser.id);
+
         // Return with the guest's entered name (not the DB name)
         return reply.send({
             user: {

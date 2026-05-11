@@ -166,6 +166,9 @@ export default function App() {
             setStatus("");
             setGuestModalOpen(false);
             setGuestName("");
+            setCart({});
+            setCheckoutMessage("");
+            await loadProducts();
         } catch {
             setStatus("Erreur reseau");
         }
