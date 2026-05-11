@@ -1571,30 +1571,25 @@ export default function App() {
                         </p>
                         {!topupQrData && (
                             <>
-                                <label
+                                <div
                                     style={{
-                                        display: "grid",
-                                        gap: 6,
-                                        fontWeight: 700,
+                                        textAlign: "center",
+                                        fontWeight: 900,
+                                        fontSize: "2rem",
+                                        padding: "12px",
+                                        background: "#1a2a34",
+                                        borderRadius: 10,
+                                        border: "2px solid #3a4a54",
                                     }}
                                 >
-                                    Montant en EUR
-                                    <input
-                                        type="text"
-                                        inputMode="decimal"
-                                        value={topupAmount}
-                                        onChange={(e) =>
-                                            setTopupAmount(e.target.value)
-                                        }
-                                        placeholder="10"
-                                        style={{ padding: "8px 12px" }}
-                                    />
-                                </label>
+                                    {topupAmount || "0"} €
+                                </div>
                                 <div
                                     style={{
                                         display: "flex",
                                         gap: 8,
                                         flexWrap: "wrap",
+                                        justifyContent: "center",
                                     }}
                                 >
                                     {[5, 10, 20].map((eur) => (
@@ -1609,10 +1604,90 @@ export default function App() {
                                                     topupAmount === String(eur)
                                                         ? "2px solid #5a8"
                                                         : undefined,
+                                                padding: "10px 20px",
+                                                fontSize: "1.1rem",
                                             }}
                                         >
                                             {eur}€
                                         </button>
+                                    ))}
+                                </div>
+                                <div
+                                    className="onscreen-keyboard"
+                                    aria-label="Clavier numerique"
+                                >
+                                    {[
+                                        ["1", "2", "3"],
+                                        ["4", "5", "6"],
+                                        ["7", "8", "9"],
+                                        [".", "0", "⌫"],
+                                    ].map((row, rowIndex) => (
+                                        <div
+                                            className="keyboard-row"
+                                            key={rowIndex}
+                                        >
+                                            {row.map((key) => (
+                                                <button
+                                                    key={key}
+                                                    className="keyboard-key"
+                                                    onClick={() => {
+                                                        if (key === "⌫") {
+                                                            setTopupAmount(
+                                                                (prev) =>
+                                                                    prev.slice(
+                                                                        0,
+                                                                        -1,
+                                                                    ),
+                                                            );
+                                                        } else if (
+                                                            key === "."
+                                                        ) {
+                                                            setTopupAmount(
+                                                                (prev) =>
+                                                                    prev.includes(
+                                                                        ".",
+                                                                    )
+                                                                        ? prev
+                                                                        : prev +
+                                                                              ".",
+                                                            );
+                                                        } else {
+                                                            setTopupAmount(
+                                                                (prev) => {
+                                                                    const cleaned =
+                                                                        prev.replace(
+                                                                            ",",
+                                                                            ".",
+                                                                        );
+                                                                    if (
+                                                                        cleaned ===
+                                                                        "0"
+                                                                    )
+                                                                        return key;
+                                                                    const parts =
+                                                                        cleaned.split(
+                                                                            ".",
+                                                                        );
+                                                                    if (
+                                                                        parts[1] &&
+                                                                        parts[1]
+                                                                            .length >=
+                                                                            2
+                                                                    )
+                                                                        return prev;
+                                                                    return (
+                                                                        cleaned +
+                                                                        key
+                                                                    );
+                                                                },
+                                                            );
+                                                        }
+                                                    }}
+                                                >
+                                                    {key}
+                                                </button>
+                                            ))}
+                                        </div>
                                     ))}
                                 </div>
                                 {topupError && (
