@@ -18,14 +18,6 @@ type Product = {
     image_slug?: string | null;
 };
 type Cart = Record<number, number>;
-type DebtItem = { product_id: number; product_name: string; qty: number };
-type DebtSummary = {
-    balance_cents: number;
-    unpaid_closed_cents: number;
-    open_cents: number;
-    total_cents: number;
-    items: DebtItem[];
-};
 type BadgeRequestForm = { name: string; email: string; uid: string };
 type BadgeRequestField = keyof BadgeRequestForm;
 type AccountDetailDialog = "confirm" | "success" | null;
@@ -122,7 +114,6 @@ export default function App() {
         remittance: string;
         qr_code_data_url: string;
     } | null>(null);
-    const [debtModalOpen, setDebtModalOpen] = useState(false);
     const [accountDetailDialog, setAccountDetailDialog] =
         useState<AccountDetailDialog>(null);
     const [accountDetailError, setAccountDetailError] = useState("");
@@ -145,8 +136,6 @@ export default function App() {
     const [products, setProducts] = useState<Product[]>([]);
     const [cart, setCart] = useState<Cart>({});
     const [checkoutMessage, setCheckoutMessage] = useState("");
-    const [debt, setDebt] = useState<DebtSummary | null>(null);
-    const [debtError, setDebtError] = useState("");
     const [imageErrors, setImageErrors] = useState<Record<string, true>>({});
 
     const inputRef = useRef<HTMLInputElement | null>(null);
@@ -180,7 +169,6 @@ export default function App() {
         setQrModalOpen(false);
         setQrPaymentData(null);
         setQrError("");
-        setDebtModalOpen(false);
         setAccountDetailDialog(null);
         setScreen("badge");
         setStatus("Pas de badge ? Contactez le comité.");
@@ -257,34 +245,6 @@ export default function App() {
         const res = await fetch("/api/kiosk/products");
         const data = await res.json();
         setProducts(data.products);
-    }
-
-    async function loadDebt(userId: number) {
-        setDebtError("");
-        const res = await fetch(`/api/kiosk/debt/${userId}`);
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            if (res.status === 403) {
-                showBlockedModal(err.user?.name);
-                return;
-            }
-            setDebtError(err.error || `Erreur (${res.status})`);
-            setDebt(null);
-            return;
-        }
-
-        const data = await res.json();
-        setDebt(data);
-        setUser((current) =>
-            current
-                ? {
-                      ...current,
-                      balance_cents: Number(
-                          data.balance_cents ?? current.balance_cents,
-                      ),
-                  }
-                : current,
-        );
     }
 
     function onBadgeKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -659,7 +619,6 @@ export default function App() {
                 setCart({});
                 setUser(null);
                 setProducts([]);
-                setDebtModalOpen(false);
                 setAccountDetailDialog(null);
                 setScreen("badge");
                 setStatus("Pas de badge ? Contactez le comité.");
@@ -732,7 +691,6 @@ export default function App() {
             setQrModalOpen(false);
             setQrPaymentData(null);
             setQrError("");
-            setDebtModalOpen(false);
             setAccountDetailDialog(null);
             setStatus("Pas de badge ? Contactez le comité.");
             setScreen("badge");
@@ -887,15 +845,7 @@ export default function App() {
                                 </p>
                             </div>
                             <div className="header-actions">
-                                <button
-                                    className="ghost-button"
-                                    onClick={async () => {
-                                        await loadDebt(user.id);
-                                        setDebtModalOpen(true);
-                                    }}
-                                >
-                                    Mon compte
-                                </button>
+
                                 <button
                                     className="ghost-button"
                                     onClick={requestAccountDetail}
@@ -931,7 +881,6 @@ export default function App() {
                                         setQrModalOpen(false);
                                         setQrPaymentData(null);
                                         setQrError("");
-                                        setDebtModalOpen(false);
                                         setAccountDetailDialog(null);
                                         setStatus(
                                             "Pas de badge ? Contactez le comité.",
@@ -1083,86 +1032,6 @@ export default function App() {
                             </aside>
                         </div>
                     </section>
-                )}
-
-                {debtModalOpen && user && (
-                    <div
-                        className="debt-modal-backdrop"
-                        role="dialog"
-                        aria-modal="true"
-                    >
-                        <section className="debt-card debt-modal">
-                            <header className="debt-header">
-                                <div>
-                                    <p className="kiosk-greeting">
-                                        Votre compte
-                                    </p>
-                                    <h2>{user.name}</h2>
-                                </div>
-                                <button
-                                    className="ghost-button"
-                                    onClick={() => setDebtModalOpen(false)}
-                                >
-                                    Fermer
-                                </button>
-                            </header>
-
-                            {debtError && (
-                                <p className="debt-error">{debtError}</p>
-                            )}
-
-                            {!debt ? (
-                                <p className="empty-state">Chargement...</p>
-                            ) : (
-                                <div className="debt-grid">
-                                    <div className="debt-total">
-                                        <span>Solde disponible</span>
-                                        <strong>
-                                            {euros(debt.balance_cents)}
-                                        </strong>
-                                        <div className="debt-split">
-                                            <span>
-                                                Dette totale:{" "}
-                                                {euros(debt.total_cents)}
-                                            </span>
-                                            <span>
-                                                Dette impayee:{" "}
-                                                {euros(
-                                                    debt.unpaid_closed_cents,
-                                                )}
-                                            </span>
-                                            <span>
-                                                Dette en cours:{" "}
-                                                {euros(debt.open_cents)}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <div className="debt-items">
-                                        <h3>Consommations</h3>
-                                        {debt.items.length === 0 ? (
-                                            <p className="empty-state">
-                                                Aucune consommation en cours.
-                                            </p>
-                                        ) : (
-                                            <ul>
-                                                {debt.items.map((item) => (
-                                                    <li key={item.product_id}>
-                                                        <span>
-                                                            {item.product_name}
-                                                        </span>
-                                                        <strong>
-                                                            {item.qty}
-                                                        </strong>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                        </section>
-                    </div>
                 )}
                 {screen === "thanks" && (
                     <section className="thanks-card">
@@ -1649,7 +1518,7 @@ export default function App() {
                                                                     )
                                                                         ? prev
                                                                         : prev +
-                                                                              ".",
+                                                                          ".",
                                                             );
                                                         } else {
                                                             setTopupAmount(
