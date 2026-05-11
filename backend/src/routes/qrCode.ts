@@ -266,6 +266,20 @@ export async function qrCodeRoutes(app: FastifyInstance) {
             expires_at: expiresAt,
         });
 
+        // Enregistrer le QR code en base (en attente de confirmation user)
+        try {
+            db.prepare(
+                `INSERT INTO qr_code_payments (unique_id, user_id, amount_cents, status, confirmed_by_user)
+                 VALUES (?, ?, ?, 'unverified', 0)`,
+            ).run(uniqueId, user.id, amountCents);
+        } catch (error: unknown) {
+            const msg = String((error as Error)?.message ?? error);
+            if (msg.includes("UNIQUE")) {
+                return reply.code(409).send({ error: "Un QR Code avec cette reference existe deja." });
+            }
+            throw error;
+        }
+
         return reply.send({
             unique_id: uniqueId,
             amount_cents: amountCents,
@@ -388,12 +402,10 @@ export async function qrCodeRoutes(app: FastifyInstance) {
                     throw new Error("AMOUNT_MISMATCH");
                 }
 
+                // Marquer comme confirmé par l'utilisateur
                 db.prepare(
-                    `
-          INSERT INTO qr_code_payments (unique_id, user_id, amount_cents, status, confirmed_by_user)
-          VALUES (?, ?, ?, 'unverified', 1)
-        `,
-                ).run(uniqueId, body.data.user_id, body.data.amount_cents);
+                    `UPDATE qr_code_payments SET confirmed_by_user = 1 WHERE unique_id = ?`,
+                ).run(uniqueId);
 
                 const orderId = randomBytes(16).toString("hex");
                 const monthKey = getMonthKeyParisLike();
