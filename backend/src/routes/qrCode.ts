@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { createHmac, randomBytes } from "crypto";
+import { createHmac, randomBytes, randomUUID } from "crypto";
 import { z } from "zod";
 import QRCode from "qrcode";
 import { getDB } from "../db/db.js";
@@ -668,26 +668,32 @@ export async function qrCodeRoutes(app: FastifyInstance) {
             .object({ id: z.coerce.number().int().positive() })
             .safeParse(req.params);
         const body = z
-            .object({ status: z.enum(["verified", "unverified"]) })
+            .object({
+                status: z.enum(["verified", "unverified"]),
+                type: z.enum(["payment", "topup"]).optional(),
+            })
             .safeParse(req.body);
         if (!params.success || !body.success)
             return reply.code(400).send({ error: "Invalid payload" });
 
         const db = getDB();
 
-        // Try qr_code_payments first, then topup_qr_requests
+        // Use type if provided, otherwise try both tables
         let table: string | null = null;
-        const paymentExists = db
-            .prepare(`SELECT id FROM qr_code_payments WHERE id = ?`)
-            .get(params.data.id);
-        if (paymentExists) {
-            table = "qr_code_payments";
+        if (body.data.type === "payment") {
+            const exists = db.prepare(`SELECT id FROM qr_code_payments WHERE id = ?`).get(params.data.id);
+            if (exists) table = "qr_code_payments";
+        } else if (body.data.type === "topup") {
+            const exists = db.prepare(`SELECT id FROM topup_qr_requests WHERE id = ?`).get(params.data.id);
+            if (exists) table = "topup_qr_requests";
         } else {
-            const topupExists = db
-                .prepare(`SELECT id FROM topup_qr_requests WHERE id = ?`)
-                .get(params.data.id);
-            if (topupExists) {
-                table = "topup_qr_requests";
+            // Fallback: try payment first, then topup
+            const paymentExists = db.prepare(`SELECT id FROM qr_code_payments WHERE id = ?`).get(params.data.id);
+            if (paymentExists) {
+                table = "qr_code_payments";
+            } else {
+                const topupExists = db.prepare(`SELECT id FROM topup_qr_requests WHERE id = ?`).get(params.data.id);
+                if (topupExists) table = "topup_qr_requests";
             }
         }
 
@@ -695,7 +701,7 @@ export async function qrCodeRoutes(app: FastifyInstance) {
             return reply.code(404).send({ error: "Paiement introuvable" });
 
         // Get current status to prevent double-credit
-        const current = db.prepare(`SELECT status, user_id, amount_cents FROM ${table} WHERE id = ?`).get(params.data.id) as any;
+        const current = db.prepare(`SELECT status, user_id, amount_cents, unique_id FROM ${table} WHERE id = ?`).get(params.data.id) as any;
 
         db.prepare(
             `
@@ -706,10 +712,35 @@ export async function qrCodeRoutes(app: FastifyInstance) {
     `,
         ).run(body.data.status, body.data.status, params.data.id);
 
-        // Credit user balance for topup when verified (only if was unverified before)
-        if (table === 'topup_qr_requests' && body.data.status === 'verified' && current && current.status !== 'verified') {
-            db.prepare(`UPDATE users SET balance_cents = balance_cents + ? WHERE id = ?`)
-                .run(current.amount_cents, current.user_id);
+        // Credit/debit user balance for topup status changes
+        if (table === 'topup_qr_requests' && current) {
+            if (body.data.status === 'verified' && current.status !== 'verified') {
+                // Credit balance + log in account_transactions
+                db.prepare(`UPDATE users SET balance_cents = balance_cents + ? WHERE id = ?`)
+                    .run(current.amount_cents, current.user_id);
+                db.prepare(`
+                    INSERT INTO account_transactions (id, user_id, delta_cents, reason, comment)
+                    VALUES (?, ?, ?, 'topup', ?)
+                `).run(
+                    randomUUID(),
+                    current.user_id,
+                    current.amount_cents,
+                    `QR topup verifie #${params.data.id} (${current.unique_id || ''})`
+                );
+            } else if (body.data.status === 'unverified' && current.status === 'verified') {
+                // Debit balance
+                db.prepare(`UPDATE users SET balance_cents = balance_cents - ? WHERE id = ?`)
+                    .run(current.amount_cents, current.user_id);
+                db.prepare(`
+                    INSERT INTO account_transactions (id, user_id, delta_cents, reason, comment)
+                    VALUES (?, ?, ?, 'adjustment', ?)
+                `).run(
+                    randomUUID(),
+                    current.user_id,
+                    -current.amount_cents,
+                    `QR topup de-verifie #${params.data.id} (${current.unique_id || ''})`
+                );
+            }
         }
 
         return reply.send({ ok: true });
