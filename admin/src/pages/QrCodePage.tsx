@@ -11,6 +11,7 @@ type QrRow = {
     created_at: string;
     status: "verified" | "unverified";
     verified_at: string | null;
+    qr_type: "payment" | "topup";
 };
 
 type QrSettings = {
@@ -32,6 +33,9 @@ export default function QrCodePage() {
         "" | "verified" | "unverified"
     >("");
     const [nameFilter, setNameFilter] = useState("");
+    const [typeFilter, setTypeFilter] = useState<"" | "payment" | "topup">(
+        "",
+    );
 
     const [settings, setSettings] = useState<QrSettings>({
         recipient_name: "",
@@ -49,6 +53,7 @@ export default function QrCodePage() {
             const qs = new URLSearchParams();
             if (statusFilter) qs.set("status", statusFilter);
             if (nameFilter.trim()) qs.set("name", nameFilter.trim());
+            if (typeFilter) qs.set("type", typeFilter);
             const data = await api<{ rows: QrRow[] }>(
                 `/api/admin/qr-code?${qs.toString()}`,
             );
@@ -71,7 +76,7 @@ export default function QrCodePage() {
 
     useEffect(() => {
         loadRows();
-    }, [statusFilter, nameFilter]);
+    }, [statusFilter, nameFilter, typeFilter]);
 
     useEffect(() => {
         loadSettings();
@@ -264,6 +269,20 @@ export default function QrCodePage() {
                 </label>
 
                 <label>
+                    Type :{" "}
+                    <select
+                        value={typeFilter}
+                        onChange={(e) =>
+                            setTypeFilter(e.target.value as any)
+                        }
+                    >
+                        <option value="">Tous</option>
+                        <option value="payment">Paiement commande</option>
+                        <option value="topup">Top-up</option>
+                    </select>
+                </label>
+
+                <label>
                     Utilisateur :{" "}
                     <input
                         value={nameFilter}
@@ -298,7 +317,7 @@ export default function QrCodePage() {
                             borderRadius: 10,
                             padding: 10,
                             display: "grid",
-                            gridTemplateColumns: "1.6fr 1.5fr 1fr auto",
+                            gridTemplateColumns: "1.2fr 1.2fr 0.8fr 0.8fr auto",
                             gap: 8,
                             alignItems: "center",
                         }}
@@ -322,6 +341,28 @@ export default function QrCodePage() {
                                 {euros(Number(row.amount_cents ?? 0))}
                             </div>
                             <div style={{ opacity: 0.7 }}>{row.created_at}</div>
+                        </div>
+                        <div>
+                            <span
+                                style={{
+                                    padding: "2px 8px",
+                                    borderRadius: 4,
+                                    fontSize: "0.85em",
+                                    fontWeight: 700,
+                                    background:
+                                        row.qr_type === "topup"
+                                            ? "#2a4a5a"
+                                            : "#3a4a2a",
+                                    color:
+                                        row.qr_type === "topup"
+                                            ? "#8cf"
+                                            : "#8f8",
+                                }}
+                            >
+                                {row.qr_type === "topup"
+                                    ? "Top-up"
+                                    : "Commande"}
+                            </span>
                         </div>
                         <div
                             style={{

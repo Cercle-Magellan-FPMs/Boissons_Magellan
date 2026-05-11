@@ -484,6 +484,7 @@ export async function qrCodeRoutes(app: FastifyInstance) {
             .object({
                 status: z.enum(["verified", "unverified"]).optional(),
                 name: z.string().trim().optional(),
+                type: z.enum(["payment", "topup"]).optional(),
             })
             .safeParse(req.query ?? {});
 
@@ -491,41 +492,63 @@ export async function qrCodeRoutes(app: FastifyInstance) {
             return reply.code(400).send({ error: "Invalid query" });
 
         const db = getDB();
+
+        const basePayment = `
+      SELECT
+        q.id, q.unique_id, q.user_id,
+        COALESCE(u.name, '(utilisateur supprime)') AS user_name,
+        u.email AS user_email,
+        q.amount_cents, q.created_at, q.status, q.verified_at,
+        'payment' AS qr_type
+      FROM qr_code_payments q
+      LEFT JOIN users u ON u.id = q.user_id
+    `;
+
+        const baseTopup = `
+      SELECT
+        q.id, q.unique_id, q.user_id,
+        COALESCE(u.name, '(utilisateur supprime)') AS user_name,
+        u.email AS user_email,
+        q.amount_cents, q.requested_at AS created_at, q.status, q.verified_at,
+        'topup' AS qr_type
+      FROM topup_qr_requests q
+      LEFT JOIN users u ON u.id = q.user_id
+    `;
+
         const where: string[] = [];
-        const values: Array<string> = [];
+        const params: Array<string> = [];
 
         if (query.data.status) {
-            where.push("q.status = ?");
-            values.push(query.data.status);
+            where.push("status = ?");
+            params.push(query.data.status);
         }
-
         if (query.data.name) {
-            where.push("LOWER(COALESCE(u.name, '')) LIKE ?");
-            values.push(`%${query.data.name.toLowerCase()}%`);
+            where.push("LOWER(COALESCE(user_name, '')) LIKE ?");
+            params.push(`%${query.data.name.toLowerCase()}%`);
         }
 
         const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
 
-        const rows = db
-            .prepare(
-                `
-      SELECT
-        q.id,
-        q.unique_id,
-        q.user_id,
-        COALESCE(u.name, '(utilisateur supprimé)') AS user_name,
-        u.email AS user_email,
-        q.amount_cents,
-        q.created_at,
-        q.status,
-        q.verified_at
-      FROM qr_code_payments q
-      LEFT JOIN users u ON u.id = q.user_id
-      ${whereSql}
-      ORDER BY q.created_at DESC, q.id DESC
-    `,
-            )
-            .all(...values) as Array<{
+        let sql: string;
+        let allParams: Array<string>;
+
+        if (query.data.type === "payment") {
+            sql = `SELECT * FROM (${basePayment}) ${whereSql}`;
+            allParams = params;
+        } else if (query.data.type === "topup") {
+            sql = `SELECT * FROM (${baseTopup}) ${whereSql}`;
+            allParams = params;
+        } else {
+            // UNION: apply where to each branch then UNION
+            const paymentWithWhere = `SELECT * FROM (${basePayment}) ${whereSql}`;
+            const topupWithWhere = `SELECT * FROM (${baseTopup}) ${whereSql}`;
+            sql = `${paymentWithWhere} UNION ALL ${topupWithWhere}`;
+            allParams = [...params, ...params]; // params for both branches
+        }
+
+        sql += " ORDER BY created_at DESC, id DESC";
+
+        const rows = db.prepare(sql).all(...allParams) as Array<{
             id: number;
             unique_id: string;
             user_id: number;
@@ -535,11 +558,11 @@ export async function qrCodeRoutes(app: FastifyInstance) {
             created_at: string;
             status: "verified" | "unverified";
             verified_at: string | null;
+            qr_type: "payment" | "topup";
         }>;
 
         return reply.send({ rows });
     });
-
     app.patch("/api/admin/qr-code/:id", async (req, reply) => {
         try {
             requireAdmin(req);
@@ -557,15 +580,29 @@ export async function qrCodeRoutes(app: FastifyInstance) {
             return reply.code(400).send({ error: "Invalid payload" });
 
         const db = getDB();
-        const exists = db
+
+        // Try qr_code_payments first, then topup_qr_requests
+        let table: string | null = null;
+        const paymentExists = db
             .prepare(`SELECT id FROM qr_code_payments WHERE id = ?`)
             .get(params.data.id);
-        if (!exists)
+        if (paymentExists) {
+            table = "qr_code_payments";
+        } else {
+            const topupExists = db
+                .prepare(`SELECT id FROM topup_qr_requests WHERE id = ?`)
+                .get(params.data.id);
+            if (topupExists) {
+                table = "topup_qr_requests";
+            }
+        }
+
+        if (!table)
             return reply.code(404).send({ error: "Paiement introuvable" });
 
         db.prepare(
             `
-      UPDATE qr_code_payments
+      UPDATE ${table}
       SET status = ?,
           verified_at = CASE WHEN ? = 'verified' THEN datetime('now') ELSE NULL END
       WHERE id = ?
@@ -743,11 +780,9 @@ export async function qrCodeRoutes(app: FastifyInstance) {
         } catch (error: unknown) {
             const msg = String((error as Error)?.message ?? error);
             if (msg.includes("UNIQUE")) {
-                return reply
-                    .code(409)
-                    .send({
-                        error: "Un QR Code de top-up avec cette référence existe déjà.",
-                    });
+                return reply.code(409).send({
+                    error: "Un QR Code de top-up avec cette référence existe déjà.",
+                });
             }
             req.log.error({ error }, "topup qr request insert failed");
             return reply.code(500).send({ error: "Erreur interne" });
