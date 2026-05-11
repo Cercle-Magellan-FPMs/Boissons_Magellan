@@ -1162,17 +1162,55 @@ export default function App() {
             )}
             {guestModalOpen && (
                 <div className="payment-modal-backdrop" onClick={() => setGuestModalOpen(false)}>
-                    <div className="payment-modal" onClick={(e) => e.stopPropagation()} style={{ padding: 20 }}>
+                    <div className="payment-modal" onClick={(e) => e.stopPropagation()} style={{ padding: 20, maxWidth: 460 }}>
                         <h2>👤 Mode invité</h2>
-                        <p style={{ opacity: 0.8 }}>Entrez votre prénom pour continuer :</p>
-                        <input
-                            autoFocus
-                            value={guestName}
-                            onChange={(e) => setGuestName(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === "Enter") identifyGuest(); }}
-                            placeholder="Votre prénom"
-                            style={{ padding: "10px", fontSize: "1.1rem", width: "100%" }}
-                        />
+                        <p style={{ opacity: 0.8, marginBottom: 8 }}>Entrez votre prénom :</p>
+                        <div style={{
+                            textAlign: "center",
+                            fontWeight: 900,
+                            fontSize: "1.4rem",
+                            padding: "10px",
+                            background: "#1a2a34",
+                            borderRadius: 8,
+                            border: "2px solid #3a4a54",
+                            marginBottom: 10,
+                            minHeight: 44,
+                        }}>
+                            {guestName || " "}
+                        </div>
+                        <div className="onscreen-keyboard" aria-label="Clavier">
+                            {[
+                                ["a", "z", "e", "r", "t", "y", "u", "i", "o", "p"],
+                                ["q", "s", "d", "f", "g", "h", "j", "k", "l", "m"],
+                                ["w", "x", "c", "v", "b", "n"],
+                            ].map((row, rowIndex) => (
+                                <div className="keyboard-row" key={rowIndex}>
+                                    {row.map((key) => (
+                                        <button
+                                            key={key}
+                                            className="keyboard-key"
+                                            onClick={() => setGuestName((prev) => prev + key)}
+                                        >
+                                            {key}
+                                        </button>
+                                    ))}
+                                </div>
+                            ))}
+                            <div className="keyboard-row keyboard-row-actions">
+                                <button
+                                    className="keyboard-key keyboard-wide"
+                                    onClick={() => setGuestName((prev) => prev.slice(0, -1))}
+                                >
+                                    ⌫
+                                </button>
+                                <button
+                                    className="keyboard-key keyboard-extra-wide"
+                                    onClick={() => setGuestName((prev) => prev + " ")}
+                                >
+                                    Espace
+                                </button>
+                            </div>
+                        </div>
                         <div className="payment-modal-actions" style={{ marginTop: 12 }}>
                             <button className="ghost-button" onClick={() => setGuestModalOpen(false)}>
                                 Annuler
