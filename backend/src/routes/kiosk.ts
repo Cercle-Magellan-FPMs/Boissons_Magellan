@@ -218,6 +218,22 @@ export async function kioskRoutes(app: FastifyInstance) {
                 normalizedUid,
             );
 
+            // Notify admins about new badge request
+            const notifyEmails = (process.env.NOTIFY_BADGE_EMAILS || "").trim();
+            if (notifyEmails) {
+                sendMail({
+                    to: notifyEmails,
+                    subject: `[Boissons] Nouvelle demande de badge - ${body.data.name}`,
+                    text: [
+                        `Une nouvelle demande de badge a ete soumise.`,
+                        "",
+                        `Nom : ${body.data.name}`,
+                        `Email : ${body.data.email}`,
+                        `Badge UID : ${normalizedUid}`,
+                    ].join("\n"),
+                }).catch((e: any) => req.log.error({ error: e }, "badge notification email failed"));
+            }
+
             return reply.send({ ok: true, request_id: id });
         } catch (error: any) {
             const message = String(error?.message || error);

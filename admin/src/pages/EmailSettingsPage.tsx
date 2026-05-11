@@ -8,6 +8,8 @@ type EmailSettings = {
   user: string;
   from: string;
   password_configured: boolean;
+  notify_payment_emails: string;
+  notify_badge_emails: string;
 };
 
 const emptySettings: EmailSettings = {
@@ -17,11 +19,15 @@ const emptySettings: EmailSettings = {
   user: "",
   from: "",
   password_configured: false,
+  notify_payment_emails: "",
+  notify_badge_emails: "",
 };
 
 export default function EmailSettingsPage() {
   const [settings, setSettings] = useState<EmailSettings>(emptySettings);
   const [password, setPassword] = useState("");
+  const [notifyPayment, setNotifyPayment] = useState("");
+  const [notifyBadge, setNotifyBadge] = useState("");
   const [testTo, setTestTo] = useState("");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -33,6 +39,8 @@ export default function EmailSettingsPage() {
     try {
       const data = await api<EmailSettings>("/api/admin/email-settings");
       setSettings(data);
+      setNotifyPayment(data.notify_payment_emails || "");
+      setNotifyBadge(data.notify_badge_emails || "");
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -58,11 +66,15 @@ export default function EmailSettingsPage() {
           secure: settings.secure,
           user: settings.user.trim(),
           password,
+          notify_payment_emails: notifyPayment,
+          notify_badge_emails: notifyBadge,
           from: settings.from.trim(),
         }),
       });
       setSettings(data.settings);
       setPassword("");
+      setNotifyPayment(data.settings.notify_payment_emails || "");
+      setNotifyBadge(data.settings.notify_badge_emails || "");
       setMessage("Configuration email enregistrée.");
     } catch (e: any) {
       setError(e.message);
@@ -164,6 +176,27 @@ export default function EmailSettingsPage() {
               placeholder={settings.password_configured ? "Nouveau mot de passe optionnel" : "Mot de passe SMTP"}
             />
           </label>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span>Emails notifiés - Paiement confirmé</span>
+              <input
+                value={notifyPayment}
+                onChange={(e) => setNotifyPayment(e.target.value)}
+                placeholder="admin@example.com, trezo@example.com"
+              />
+              <small style={{ opacity: 0.6 }}>Séparés par des virgules. Notification quand un QR code est marqué vérifié.</small>
+            </label>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span>Emails notifiés - Demande de badge</span>
+              <input
+                value={notifyBadge}
+                onChange={(e) => setNotifyBadge(e.target.value)}
+                placeholder="admin@example.com"
+              />
+              <small style={{ opacity: 0.6 }}>Séparés par des virgules. Notification quand un utilisateur demande un badge.</small>
+            </label>
+          </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
             <button onClick={save} className="primary-button">

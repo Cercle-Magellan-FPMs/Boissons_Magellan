@@ -12,6 +12,8 @@ const SMTP_KEYS = [
   "SMTP_USER",
   "SMTP_PASS",
   "SMTP_FROM",
+  "NOTIFY_PAYMENT_EMAILS",
+  "NOTIFY_BADGE_EMAILS",
 ] as const;
 
 type SmtpKey = typeof SMTP_KEYS[number];
@@ -87,6 +89,8 @@ function currentSmtpSettings() {
     user: get("SMTP_USER"),
     from: get("SMTP_FROM"),
     password_configured: Boolean(get("SMTP_PASS")),
+    notify_payment_emails: get("NOTIFY_PAYMENT_EMAILS"),
+    notify_badge_emails: get("NOTIFY_BADGE_EMAILS"),
   };
 }
 
@@ -111,6 +115,8 @@ export async function adminEmailSettingsRoutes(app: FastifyInstance) {
       user: z.string().trim().min(1),
       password: z.string().optional(),
       from: z.string().trim().min(1),
+      notify_payment_emails: z.string().trim().optional(),
+      notify_badge_emails: z.string().trim().optional(),
     });
 
     const parsed = schema.safeParse(req.body);
@@ -123,6 +129,9 @@ export async function adminEmailSettingsRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "SMTP password is required" });
     }
 
+    const notifyPayment = (parsed.data.notify_payment_emails ?? "").trim();
+    const notifyBadge = (parsed.data.notify_badge_emails ?? "").trim();
+
     writeEnvValues({
       SMTP_HOST: parsed.data.host.trim(),
       SMTP_PORT: String(parsed.data.port),
@@ -130,6 +139,8 @@ export async function adminEmailSettingsRoutes(app: FastifyInstance) {
       SMTP_USER: parsed.data.user.trim(),
       SMTP_PASS: password,
       SMTP_FROM: parsed.data.from.trim(),
+      NOTIFY_PAYMENT_EMAILS: notifyPayment,
+      NOTIFY_BADGE_EMAILS: notifyBadge,
     });
 
     return { ok: true, settings: currentSmtpSettings() };

@@ -4,6 +4,7 @@ import { z } from "zod";
 import QRCode from "qrcode";
 import { getDB } from "../db/db.js";
 import { requireAdmin } from "./admin/_auth.js";
+import { sendMail } from "../lib/mailer.js";
 
 type QrSettings = {
     recipient_name: string;
@@ -638,6 +639,33 @@ export async function qrCodeRoutes(app: FastifyInstance) {
       WHERE id = ?
     `,
         ).run(body.data.status, body.data.status, params.data.id);
+
+        // Send notification if marking as verified
+        if (body.data.status === "verified") {
+            const notifyEmails = (process.env.NOTIFY_PAYMENT_EMAILS || "").trim();
+            if (notifyEmails) {
+                const row = db.prepare(
+                    `SELECT unique_id, amount_cents, COALESCE(u.name, '?') AS user_name
+                     FROM ${table} q LEFT JOIN users u ON u.id = q.user_id
+                     WHERE q.id = ?`
+                ).get(params.data.id) as any;
+                if (row) {
+                    const typeLabel = table === "topup_qr_requests" ? "top-up" : "paiement";
+                    sendMail({
+                        to: notifyEmails,
+                        subject: `[Boissons] ${typeLabel} verifie - ${row.user_name} - ${(row.amount_cents / 100).toFixed(2)} EUR`,
+                        text: [
+                            `Un ${typeLabel} a ete marque comme verifie.`,
+                            "",
+                            `Utilisateur : ${row.user_name}`,
+                            `Montant : ${(row.amount_cents / 100).toFixed(2)} EUR`,
+                            `Reference : ${row.unique_id}`,
+                            `Type : ${typeLabel}`,
+                        ].join("\n"),
+                    }).catch((e: any) => req.log.error({ error: e }, "notification email failed"));
+                }
+            }
+        }
 
         return reply.send({ ok: true });
     });
