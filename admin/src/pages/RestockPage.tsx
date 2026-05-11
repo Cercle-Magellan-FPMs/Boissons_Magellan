@@ -15,6 +15,21 @@ type StockMove = {
     comment: string | null;
 };
 
+function toBrusselsTime(sqliteTs: string): string {
+    const normalized =
+        sqliteTs.replace(" ", "T") + (sqliteTs.includes("Z") ? "" : "Z");
+    const date = new Date(normalized);
+    if (isNaN(date.getTime())) return sqliteTs;
+    return date.toLocaleString("fr-BE", {
+        timeZone: "Europe/Brussels",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+}
+
 export default function RestockPage() {
     const [products, setProducts] = useState<AdminProduct[]>([]);
     const [lines, setLines] = useState<Line[]>([{ product_id: 0, qty: 1 }]);
@@ -494,9 +509,7 @@ export default function RestockPage() {
                                             }}
                                         >
                                             <td style={tdStyle}>
-                                                {m.ts
-                                                    .replace("T", " ")
-                                                    .slice(0, 16)}
+                                                {toBrusselsTime(m.ts)}
                                             </td>
                                             <td style={tdStyle}>
                                                 {m.product_name}
