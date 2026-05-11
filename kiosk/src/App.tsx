@@ -868,7 +868,6 @@ export default function App() {
                                     setGuestName("");
                                     setGuestModalOpen(true);
                                 }}
-                                style={{ background: "#2a5a3a" }}
                             >
                                 👤 Invité
                             </button>
