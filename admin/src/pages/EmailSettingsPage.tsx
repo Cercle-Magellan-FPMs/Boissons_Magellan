@@ -191,7 +191,7 @@ export default function EmailSettingsPage() {
                 onChange={(e) => setNotifyPayment(e.target.value)}
                 placeholder="admin@example.com, trezo@example.com"
               />
-              <small style={{ opacity: 0.6 }}>Séparés par des virgules. Notification quand un QR code est marqué vérifié.</small>
+              <small style={{ opacity: 0.6 }}>Séparés par des virgules. Notification quand un user marque son paiement comme effectué.</small>
               <div style={{ marginTop: 8 }}>
                 <span>Seuil minimum (EUR) : </span>
                 <input

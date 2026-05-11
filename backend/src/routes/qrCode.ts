@@ -407,6 +407,29 @@ export async function qrCodeRoutes(app: FastifyInstance) {
                     `UPDATE qr_code_payments SET confirmed_by_user = 1 WHERE unique_id = ?`,
                 ).run(uniqueId);
 
+                // Notifier les admins si le montant dépasse le seuil
+                const notifyEmails2 = (process.env.NOTIFY_PAYMENT_EMAILS || "").trim();
+                const threshold2 = Number(process.env.NOTIFY_PAYMENT_THRESHOLD_CENTS || 500);
+                if (notifyEmails2 && body.data.amount_cents >= threshold2) {
+                    const userName = db.prepare(
+                        `SELECT name FROM users WHERE id = ?`
+                    ).get(body.data.user_id) as any;
+                    sendMail({
+                        to: notifyEmails2,
+                        subject: `[Boissons] Paiement marque paye - ${userName?.name || "?"} - ${(body.data.amount_cents / 100).toFixed(2)} EUR`,
+                        text: [
+                            `Un utilisateur a marque son paiement comme effectue.`,
+                            "",
+                            `Utilisateur : ${userName?.name || "?"}`,
+                            `Montant : ${(body.data.amount_cents / 100).toFixed(2)} EUR`,
+                            `Reference : ${uniqueId}`,
+                            `Type : paiement commande`,
+                            "",
+                            `Verifier le virement sur le compte bancaire.`,
+                        ].join("\n"),
+                    }).catch((e: any) => req.log.error({ error: e }, "notification email failed"));
+                }
+
                 const orderId = randomBytes(16).toString("hex");
                 const monthKey = getMonthKeyParisLike();
 
@@ -504,6 +527,34 @@ export async function qrCodeRoutes(app: FastifyInstance) {
         db.prepare(
             `UPDATE topup_qr_requests SET confirmed_by_user = 1 WHERE unique_id = ?`,
         ).run(params.data.unique_id);
+
+        // Notifier les admins si le montant depasse le seuil
+        const notifyEmails3 = (process.env.NOTIFY_PAYMENT_EMAILS || "").trim();
+        const threshold3 = Number(process.env.NOTIFY_PAYMENT_THRESHOLD_CENTS || 500);
+        if (notifyEmails3) {
+            const tr = db.prepare(
+                `SELECT t.amount_cents, u.name AS user_name
+                 FROM topup_qr_requests t
+                 LEFT JOIN users u ON u.id = t.user_id
+                 WHERE t.unique_id = ?`
+            ).get(params.data.unique_id) as any;
+            if (tr && tr.amount_cents >= threshold3) {
+                sendMail({
+                    to: notifyEmails3,
+                    subject: `[Boissons] Top-up marque paye - ${tr.user_name || "?"} - ${(tr.amount_cents / 100).toFixed(2)} EUR`,
+                    text: [
+                        `Un utilisateur a marque son top-up comme effectue.`,
+                        "",
+                        `Utilisateur : ${tr.user_name || "?"}`,
+                        `Montant : ${(tr.amount_cents / 100).toFixed(2)} EUR`,
+                        `Reference : ${params.data.unique_id}`,
+                        `Type : top-up`,
+                        "",
+                        `Verifier le virement sur le compte bancaire.`,
+                    ].join("\n"),
+                }).catch((e: any) => req.log.error({ error: e }, "notification email failed"));
+            }
+        }
 
         return reply.send({ ok: true });
     });
@@ -651,34 +702,6 @@ export async function qrCodeRoutes(app: FastifyInstance) {
       WHERE id = ?
     `,
         ).run(body.data.status, body.data.status, params.data.id);
-
-        // Send notification if marking as verified (above threshold)
-        if (body.data.status === "verified") {
-            const notifyEmails = (process.env.NOTIFY_PAYMENT_EMAILS || "").trim();
-            const threshold = Number(process.env.NOTIFY_PAYMENT_THRESHOLD_CENTS || 500);
-            if (notifyEmails) {
-                const row = db.prepare(
-                    `SELECT unique_id, amount_cents, COALESCE(u.name, '?') AS user_name
-                     FROM ${table} q LEFT JOIN users u ON u.id = q.user_id
-                     WHERE q.id = ?`
-                ).get(params.data.id) as any;
-                if (row && row.amount_cents >= threshold) {
-                    const typeLabel = table === "topup_qr_requests" ? "top-up" : "paiement";
-                    sendMail({
-                        to: notifyEmails,
-                        subject: `[Boissons] ${typeLabel} verifie - ${row.user_name} - ${(row.amount_cents / 100).toFixed(2)} EUR`,
-                        text: [
-                            `Un ${typeLabel} a ete marque comme verifie.`,
-                            "",
-                            `Utilisateur : ${row.user_name}`,
-                            `Montant : ${(row.amount_cents / 100).toFixed(2)} EUR`,
-                            `Reference : ${row.unique_id}`,
-                            `Type : ${typeLabel}`,
-                        ].join("\n"),
-                    }).catch((e: any) => req.log.error({ error: e }, "notification email failed"));
-                }
-            }
-        }
 
         return reply.send({ ok: true });
     });
