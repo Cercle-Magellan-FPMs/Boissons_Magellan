@@ -10,6 +10,7 @@ type EmailSettings = {
   password_configured: boolean;
   notify_payment_emails: string;
   notify_badge_emails: string;
+  notify_payment_threshold_cents: number;
 };
 
 const emptySettings: EmailSettings = {
@@ -21,6 +22,7 @@ const emptySettings: EmailSettings = {
   password_configured: false,
   notify_payment_emails: "",
   notify_badge_emails: "",
+  notify_payment_threshold_cents: 500,
 };
 
 export default function EmailSettingsPage() {
@@ -28,6 +30,7 @@ export default function EmailSettingsPage() {
   const [password, setPassword] = useState("");
   const [notifyPayment, setNotifyPayment] = useState("");
   const [notifyBadge, setNotifyBadge] = useState("");
+  const [notifyThreshold, setNotifyThreshold] = useState(500);
   const [testTo, setTestTo] = useState("");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -41,6 +44,7 @@ export default function EmailSettingsPage() {
       setSettings(data);
       setNotifyPayment(data.notify_payment_emails || "");
       setNotifyBadge(data.notify_badge_emails || "");
+      setNotifyThreshold(data.notify_payment_threshold_cents ?? 500);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -68,6 +72,7 @@ export default function EmailSettingsPage() {
           password,
           notify_payment_emails: notifyPayment,
           notify_badge_emails: notifyBadge,
+          notify_payment_threshold_cents: notifyThreshold,
           from: settings.from.trim(),
         }),
       });
@@ -75,6 +80,7 @@ export default function EmailSettingsPage() {
       setPassword("");
       setNotifyPayment(data.settings.notify_payment_emails || "");
       setNotifyBadge(data.settings.notify_badge_emails || "");
+      setNotifyThreshold(data.settings.notify_payment_threshold_cents ?? 500);
       setMessage("Configuration email enregistrée.");
     } catch (e: any) {
       setError(e.message);
@@ -186,6 +192,23 @@ export default function EmailSettingsPage() {
                 placeholder="admin@example.com, trezo@example.com"
               />
               <small style={{ opacity: 0.6 }}>Séparés par des virgules. Notification quand un QR code est marqué vérifié.</small>
+              <div style={{ marginTop: 8 }}>
+                <span>Seuil minimum (EUR) : </span>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  value={(notifyThreshold / 100).toFixed(2)}
+                  onChange={(e) => {
+                    const eur = Number(e.target.value.replace(",", "."));
+                    if (Number.isFinite(eur)) setNotifyThreshold(Math.round(eur * 100));
+                  }}
+                  style={{ width: 80, padding: "4px 8px" }}
+                />
+                <small style={{ opacity: 0.5, marginLeft: 6 }}>
+                  (défaut: 5.00)
+                </small>
+              </div>
             </label>
             <label style={{ display: "grid", gap: 6 }}>
               <span>Emails notifiés - Demande de badge</span>

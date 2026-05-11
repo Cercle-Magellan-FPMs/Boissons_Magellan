@@ -652,16 +652,17 @@ export async function qrCodeRoutes(app: FastifyInstance) {
     `,
         ).run(body.data.status, body.data.status, params.data.id);
 
-        // Send notification if marking as verified
+        // Send notification if marking as verified (above threshold)
         if (body.data.status === "verified") {
             const notifyEmails = (process.env.NOTIFY_PAYMENT_EMAILS || "").trim();
+            const threshold = Number(process.env.NOTIFY_PAYMENT_THRESHOLD_CENTS || 500);
             if (notifyEmails) {
                 const row = db.prepare(
                     `SELECT unique_id, amount_cents, COALESCE(u.name, '?') AS user_name
                      FROM ${table} q LEFT JOIN users u ON u.id = q.user_id
                      WHERE q.id = ?`
                 ).get(params.data.id) as any;
-                if (row) {
+                if (row && row.amount_cents >= threshold) {
                     const typeLabel = table === "topup_qr_requests" ? "top-up" : "paiement";
                     sendMail({
                         to: notifyEmails,

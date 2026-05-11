@@ -14,6 +14,7 @@ const SMTP_KEYS = [
   "SMTP_FROM",
   "NOTIFY_PAYMENT_EMAILS",
   "NOTIFY_BADGE_EMAILS",
+  "NOTIFY_PAYMENT_THRESHOLD_CENTS",
 ] as const;
 
 type SmtpKey = typeof SMTP_KEYS[number];
@@ -91,6 +92,7 @@ function currentSmtpSettings() {
     password_configured: Boolean(get("SMTP_PASS")),
     notify_payment_emails: get("NOTIFY_PAYMENT_EMAILS"),
     notify_badge_emails: get("NOTIFY_BADGE_EMAILS"),
+    notify_payment_threshold_cents: Number(get("NOTIFY_PAYMENT_THRESHOLD_CENTS") || 500),
   };
 }
 
@@ -117,6 +119,7 @@ export async function adminEmailSettingsRoutes(app: FastifyInstance) {
       from: z.string().trim().min(1),
       notify_payment_emails: z.string().trim().optional(),
       notify_badge_emails: z.string().trim().optional(),
+      notify_payment_threshold_cents: z.number().int().min(0).optional(),
     });
 
     const parsed = schema.safeParse(req.body);
@@ -131,6 +134,7 @@ export async function adminEmailSettingsRoutes(app: FastifyInstance) {
 
     const notifyPayment = (parsed.data.notify_payment_emails ?? "").trim();
     const notifyBadge = (parsed.data.notify_badge_emails ?? "").trim();
+    const threshold = parsed.data.notify_payment_threshold_cents ?? 500;
 
     writeEnvValues({
       SMTP_HOST: parsed.data.host.trim(),
@@ -141,6 +145,7 @@ export async function adminEmailSettingsRoutes(app: FastifyInstance) {
       SMTP_FROM: parsed.data.from.trim(),
       NOTIFY_PAYMENT_EMAILS: notifyPayment,
       NOTIFY_BADGE_EMAILS: notifyBadge,
+      NOTIFY_PAYMENT_THRESHOLD_CENTS: String(threshold),
     });
 
     return { ok: true, settings: currentSmtpSettings() };
