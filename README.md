@@ -611,6 +611,41 @@ From the repository root:
 
 - `sudo ops/vm/deploy-host.sh`
 
+### In-app stock reset (admin UI)
+
+- Page Produits : bouton "🗑️ Reset complet du stock (double confirmation)"
+  - Double confirmation via popups navigateur
+  - Appelle `POST /api/admin/products/reset-stock` avec `{ confirm: true }`
+  - Remet tous les `stock_current.qty` a 0 et enregistre un `stock_moves` par produit (reason=correction, comment="reset complet du stock")
+- Page Restock : section "📋 Historique des mouvements de stock"
+  - Affiche les 100 derniers mouvements (`GET /api/admin/stock-moves`)
+  - Les resets complets sont surlignes en rouge avec la mention "⚠️ RESET COMPLET"
+  - Delta positif en vert, negatif en rouge
+  - Bouton 🔄 Rafraichir pour recharger
+
+### Deploy after code changes
+
+From the repo root (`/opt/boissons/Boissons_Magellan`):
+
+```bash
+# 1. Build backend TypeScript
+cd backend && npm run build && cd ..
+
+# 2. Build frontend admin
+cd admin && npm run build && cd ..
+
+# 3. Deploy admin dist to nginx
+sudo rm -rf /var/www/boissons/admin/assets /var/www/boissons/admin/index.html
+sudo cp -r admin/dist/* /var/www/boissons/admin/
+sudo chown -R www-data:www-data /var/www/boissons/admin/
+
+# 4. Restart backend service
+sudo systemctl restart boissons-backend.service
+
+# 5. (optional) Reload nginx if config changed
+sudo nginx -t && sudo systemctl reload nginx
+```
+
 ### Maintenance reset script
 
 - Script: `ops/reset/reset-boissons-data.sh`
