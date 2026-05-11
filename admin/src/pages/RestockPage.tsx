@@ -13,6 +13,7 @@ type StockMove = {
     delta_qty: number;
     reason: string;
     comment: string | null;
+    user_name: string | null;
 };
 
 function toBrusselsTime(sqliteTs: string): string {
@@ -39,6 +40,7 @@ export default function RestockPage() {
     const [csvBusy, setCsvBusy] = useState(false);
     const [moves, setMoves] = useState<StockMove[]>([]);
     const [movesError, setMovesError] = useState("");
+    const [reasonFilter, setReasonFilter] = useState<string>("");
 
     async function loadProducts() {
         const data = await api<{ products: AdminProduct[] }>(
@@ -47,16 +49,24 @@ export default function RestockPage() {
         setProducts(data.products);
     }
 
-    async function loadMoves() {
+    async function loadMoves(reason?: string) {
         setMovesError("");
         try {
+            const filter = reason ?? reasonFilter;
+            const qs = filter ? `?reason=${encodeURIComponent(filter)}` : "";
             const data = await api<{ moves: StockMove[] }>(
-                "/api/admin/stock-moves",
+                `/api/admin/stock-moves${qs}`,
             );
             setMoves(data.moves);
         } catch (e: any) {
             setMovesError(e.message);
         }
+    }
+
+    function applyReasonFilter(reason: string) {
+        const next = reasonFilter === reason ? "" : reason;
+        setReasonFilter(next);
+        loadMoves(next);
     }
 
     useEffect(() => {
@@ -151,6 +161,7 @@ export default function RestockPage() {
             setSearches([""]);
             setComment("");
             await loadProducts();
+            await loadMoves();
         } catch (e: any) {
             setMsg("Erreur: " + e.message);
         }
@@ -442,7 +453,65 @@ export default function RestockPage() {
                     <h3 style={{ margin: 0 }}>
                         📋 Historique des mouvements de stock
                     </h3>
-                    <button onClick={loadMoves}>🔄 Rafraîchir</button>
+                    <div
+                        style={{
+                            display: "flex",
+                            gap: 6,
+                            alignItems: "center",
+                        }}
+                    >
+                        <button
+                            onClick={() => applyReasonFilter("sale")}
+                            style={{
+                                ...filterBtnStyle,
+                                background:
+                                    reasonFilter === "sale"
+                                        ? "#2a5a3a"
+                                        : "#1a2a34",
+                                borderColor:
+                                    reasonFilter === "sale"
+                                        ? "#4a4"
+                                        : "#3a4a54",
+                            }}
+                        >
+                            🛒 Ventes
+                        </button>
+                        <button
+                            onClick={() => applyReasonFilter("restock")}
+                            style={{
+                                ...filterBtnStyle,
+                                background:
+                                    reasonFilter === "restock"
+                                        ? "#2a4a5a"
+                                        : "#1a2a34",
+                                borderColor:
+                                    reasonFilter === "restock"
+                                        ? "#48a"
+                                        : "#3a4a54",
+                            }}
+                        >
+                            📥 Restocks
+                        </button>
+                        <button
+                            onClick={() => applyReasonFilter("correction")}
+                            style={{
+                                ...filterBtnStyle,
+                                background:
+                                    reasonFilter === "correction"
+                                        ? "#5a3a2a"
+                                        : "#1a2a34",
+                                borderColor:
+                                    reasonFilter === "correction"
+                                        ? "#a84"
+                                        : "#3a4a54",
+                            }}
+                        >
+                            🔧 Corrections
+                        </button>
+                        <button onClick={() => loadMoves()}>
+                            🔄 Rafraîchir
+                        </button>
+                    </div>
                 </div>
 
                 {movesError && (
@@ -490,6 +559,7 @@ export default function RestockPage() {
                                     <th style={thStyle}>Produit</th>
                                     <th style={thStyle}>Delta</th>
                                     <th style={thStyle}>Raison</th>
+                                    <th style={thStyle}>User</th>
                                     <th style={thStyle}>Commentaire</th>
                                 </tr>
                             </thead>
@@ -541,6 +611,9 @@ export default function RestockPage() {
                                                         : m.reason}
                                             </td>
                                             <td style={tdStyle}>
+                                                {m.user_name ?? "admin"}
+                                            </td>
+                                            <td style={tdStyle}>
                                                 {isReset
                                                     ? "⚠️ RESET COMPLET"
                                                     : (m.comment ?? "—")}
@@ -567,4 +640,14 @@ const thStyle: React.CSSProperties = {
 const tdStyle: React.CSSProperties = {
     padding: "8px 10px",
     verticalAlign: "top",
+};
+
+const filterBtnStyle: React.CSSProperties = {
+    padding: "5px 12px",
+    fontWeight: 700,
+    fontSize: "0.85em",
+    borderRadius: 6,
+    border: "1px solid #3a4a54",
+    cursor: "pointer",
+    color: "#ccc",
 };

@@ -860,19 +860,34 @@ export async function adminRoutes(app: FastifyInstance) {
         }
 
         const db = getDB();
+
+        // Filtre optionnel par raison
+        const reasonFilter = (req.query as any)?.reason as string | undefined;
+        const validReasons = ["sale", "restock", "correction"];
+        const reason = validReasons.includes(reasonFilter ?? "")
+            ? reasonFilter
+            : null;
+
+        const whereClause = reason ? `AND sm.reason = ?` : "";
+        const params = reason ? [reason] : [];
+
         const rows = db
             .prepare(
                 `
       SELECT sm.id, sm.move_id, sm.ts, sm.product_id, p.name AS product_name,
-             sm.delta_qty, sm.reason, sm.comment
+             sm.delta_qty, sm.reason, sm.comment,
+             u.name AS user_name
       FROM stock_moves sm
       JOIN products p ON p.id = sm.product_id
+      LEFT JOIN orders o ON sm.reason = 'sale' AND sm.ref_id = o.id
+      LEFT JOIN users u ON u.id = o.user_id
       WHERE p.deleted_at IS NULL
+        ${whereClause}
       ORDER BY sm.ts DESC
       LIMIT 100
     `,
             )
-            .all() as Array<{
+            .all(...params) as Array<{
             id: number;
             move_id: string;
             ts: string;
@@ -881,6 +896,7 @@ export async function adminRoutes(app: FastifyInstance) {
             delta_qty: number;
             reason: string;
             comment: string | null;
+            user_name: string | null;
         }>;
 
         return { moves: rows };
