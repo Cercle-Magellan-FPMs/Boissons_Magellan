@@ -143,6 +143,18 @@ export default function UsersPage() {
         }
     }
 
+    async function toggleTopupAccess(u: AdminUser) {
+        try {
+            await api(`/api/admin/users/${u.id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ topup_access: u.topup_access !== 1 }),
+            });
+            await load();
+        } catch (e: any) {
+            alert(e.message);
+        }
+    }
+
     async function addBadge() {
         if (!badgeModalUser) return;
         const uid = badgeInput.trim();
@@ -556,38 +568,50 @@ export default function UsersPage() {
                     borderRadius: 12,
                 }}
             >
-                <h3 onClick={() => setShowLocalAccess((prev) => !prev)} style={{ marginTop: 0, cursor: "pointer", userSelect: "none" }}>🔑 Accès au local ({localAccessUsers.length}) <span style={{ opacity: 0.5, fontSize: "0.8em" }}>{showLocalAccess ? "▲" : "▶"}</span></h3>
+                <h3
+                    onClick={() => setShowLocalAccess((prev) => !prev)}
+                    style={{
+                        marginTop: 0,
+                        cursor: "pointer",
+                        userSelect: "none",
+                    }}
+                >
+                    🔑 Accès au local ({localAccessUsers.length}){" "}
+                    <span style={{ opacity: 0.5, fontSize: "0.8em" }}>
+                        {showLocalAccess ? "▲" : "▶"}
+                    </span>
+                </h3>
                 {showLocalAccess && (
-                <div style={{ display: "grid", gap: 6 }}>
-                    {localAccessUsers.map((u) => (
-                        <div
-                            key={`local-${u.id}`}
-                            style={{
-                                border: "1px solid #444",
-                                borderRadius: 8,
-                                padding: "8px 10px",
-                                display: "flex",
-                                justifyContent: "space-between",
-                                gap: 10,
-                                alignItems: "center",
-                            }}
-                        >
-                            <div>
-                                <strong>{u.name}</strong>
-                                <span style={{ opacity: 0.7 }}>
-                                    {" "}
-                                    ({u.email || "--"})
-                                </span>
+                    <div style={{ display: "grid", gap: 6 }}>
+                        {localAccessUsers.map((u) => (
+                            <div
+                                key={`local-${u.id}`}
+                                style={{
+                                    border: "1px solid #444",
+                                    borderRadius: 8,
+                                    padding: "8px 10px",
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    gap: 10,
+                                    alignItems: "center",
+                                }}
+                            >
+                                <div>
+                                    <strong>{u.name}</strong>
+                                    <span style={{ opacity: 0.7 }}>
+                                        {" "}
+                                        ({u.email || "--"})
+                                    </span>
+                                </div>
+                                <div style={{ opacity: 0.7 }}>ID: {u.id}</div>
                             </div>
-                            <div style={{ opacity: 0.7 }}>ID: {u.id}</div>
-                        </div>
-                    ))}
-                    {localAccessUsers.length === 0 && (
-                        <p style={{ opacity: 0.7 }}>
-                            Aucun utilisateur avec accès au local.
-                        </p>
-                    )}
-                </div>
+                        ))}
+                        {localAccessUsers.length === 0 && (
+                            <p style={{ opacity: 0.7 }}>
+                                Aucun utilisateur avec accès au local.
+                            </p>
+                        )}
+                    </div>
                 )}
             </div>
 
@@ -692,6 +716,16 @@ export default function UsersPage() {
                                                     }}
                                                 >
                                                     🔑
+                                                </span>
+                                            )}
+                                            {u.topup_access === 1 && (
+                                                <span
+                                                    style={{
+                                                        marginLeft: 6,
+                                                        opacity: 0.7,
+                                                    }}
+                                                >
+                                                    💰
                                                 </span>
                                             )}
                                         </div>
@@ -902,6 +936,15 @@ export default function UsersPage() {
                                                 {u.local_access === 1
                                                     ? "🔐 Retirer accès local"
                                                     : "🔓 Donner accès local"}
+                                            </button>
+                                            <button
+                                                onClick={() =>
+                                                    toggleTopupAccess(u)
+                                                }
+                                            >
+                                                {u.topup_access === 1
+                                                    ? "🚫 Bloquer top-up"
+                                                    : "💰 Autoriser top-up"}
                                             </button>
                                             <button
                                                 onClick={() => toggleActive(u)}

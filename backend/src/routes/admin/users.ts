@@ -6,12 +6,14 @@ import { requireAdmin } from "./_auth.js";
 import { badgeMatchCandidates, normalizeBadgeUid } from "../../lib/badgeUid.js";
 
 function normUid(uid: string) {
-  return normalizeBadgeUid(uid);
+    return normalizeBadgeUid(uid);
 }
 
 function badgeExistsSql(candidateCount: number) {
-  const placeholders = Array.from({ length: candidateCount }, () => "?").join(", ");
-  return `
+    const placeholders = Array.from({ length: candidateCount }, () => "?").join(
+        ", ",
+    );
+    return `
     SELECT u.id
     FROM users u
     WHERE u.deleted_at IS NULL
@@ -29,120 +31,130 @@ function badgeExistsSql(candidateCount: number) {
 }
 
 function csvEscape(value: string) {
-  if (/[",\n\r]/.test(value)) {
-    return `"${value.replace(/"/g, "\"\"")}"`;
-  }
-  return value;
+    if (/[",\n\r]/.test(value)) {
+        return `"${value.replace(/"/g, '""')}"`;
+    }
+    return value;
 }
 
 function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let field = "";
-  let i = 0;
-  let inQuotes = false;
+    const rows: string[][] = [];
+    let row: string[] = [];
+    let field = "";
+    let i = 0;
+    let inQuotes = false;
 
-  while (i < text.length) {
-    const char = text[i];
+    while (i < text.length) {
+        const char = text[i];
 
-    if (inQuotes) {
-      if (char === "\"") {
-        if (text[i + 1] === "\"") {
-          field += "\"";
-          i += 2;
-          continue;
+        if (inQuotes) {
+            if (char === '"') {
+                if (text[i + 1] === '"') {
+                    field += '"';
+                    i += 2;
+                    continue;
+                }
+                inQuotes = false;
+                i += 1;
+                continue;
+            }
+            field += char;
+            i += 1;
+            continue;
         }
-        inQuotes = false;
+
+        if (char === '"') {
+            inQuotes = true;
+            i += 1;
+            continue;
+        }
+
+        if (char === ",") {
+            row.push(field);
+            field = "";
+            i += 1;
+            continue;
+        }
+
+        if (char === "\n") {
+            row.push(field);
+            rows.push(row);
+            row = [];
+            field = "";
+            i += 1;
+            continue;
+        }
+
+        if (char === "\r") {
+            i += 1;
+            continue;
+        }
+
+        field += char;
         i += 1;
-        continue;
-      }
-      field += char;
-      i += 1;
-      continue;
     }
 
-    if (char === "\"") {
-      inQuotes = true;
-      i += 1;
-      continue;
+    if (field.length > 0 || row.length > 0) {
+        row.push(field);
+        rows.push(row);
     }
 
-    if (char === ",") {
-      row.push(field);
-      field = "";
-      i += 1;
-      continue;
-    }
-
-    if (char === "\n") {
-      row.push(field);
-      rows.push(row);
-      row = [];
-      field = "";
-      i += 1;
-      continue;
-    }
-
-    if (char === "\r") {
-      i += 1;
-      continue;
-    }
-
-    field += char;
-    i += 1;
-  }
-
-  if (field.length > 0 || row.length > 0) {
-    row.push(field);
-    rows.push(row);
-  }
-
-  return rows;
+    return rows;
 }
 
 function parseBooleanFlag(value: string | undefined, fallback: number) {
-  if (!value) return fallback;
-  const normalized = value.trim().toLowerCase();
-  if (["1", "true", "yes", "y", "oui"].includes(normalized)) return 1;
-  if (["0", "false", "no", "n", "non"].includes(normalized)) return 0;
-  return fallback;
+    if (!value) return fallback;
+    const normalized = value.trim().toLowerCase();
+    if (["1", "true", "yes", "y", "oui"].includes(normalized)) return 1;
+    if (["0", "false", "no", "n", "non"].includes(normalized)) return 0;
+    return fallback;
 }
 
 export async function adminUserRoutes(app: FastifyInstance) {
-  const paymentDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-  const paymentMethodSchema = z.enum(["bank_transfer", "cash"]);
+    const paymentDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+    const paymentMethodSchema = z.enum(["bank_transfer", "cash"]);
 
-  async function softDeleteUser(id: number) {
-    const db = getDB();
+    async function softDeleteUser(id: number) {
+        const db = getDB();
 
-    const existing = db.prepare(`
+        const existing = db
+            .prepare(
+                `
       SELECT id FROM users WHERE id=? AND deleted_at IS NULL
-    `).get(id);
-    if (!existing) return { error: "User not found", status: 404 as const };
+    `,
+            )
+            .get(id);
+        if (!existing) return { error: "User not found", status: 404 as const };
 
-    const tx = db.transaction(() => {
-      db.prepare(`DELETE FROM user_badges WHERE user_id = ?`).run(id);
-      db.prepare(`
+        const tx = db.transaction(() => {
+            db.prepare(`DELETE FROM user_badges WHERE user_id = ?`).run(id);
+            db.prepare(
+                `
         UPDATE users
         SET is_active = 0,
             rfid_uid = NULL,
             deleted_at = datetime('now')
         WHERE id = ?
-      `).run(id);
-    });
+      `,
+            ).run(id);
+        });
 
-    tx();
-    return { ok: true as const };
-  }
-
-  // LIST USERS
-  app.get("/api/admin/users", async (req, reply) => {
-    try { requireAdmin(req); } catch (e: any) {
-      return reply.code(e.statusCode ?? 500).send({ error: e.message });
+        tx();
+        return { ok: true as const };
     }
 
-    const db = getDB();
-    const users = db.prepare(`
+    // LIST USERS
+    app.get("/api/admin/users", async (req, reply) => {
+        try {
+            requireAdmin(req);
+        } catch (e: any) {
+            return reply.code(e.statusCode ?? 500).send({ error: e.message });
+        }
+
+        const db = getDB();
+        const users = db
+            .prepare(
+                `
       SELECT
         u.id,
         u.name,
@@ -150,6 +162,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
         u.rfid_uid,
         u.is_active,
         u.local_access,
+        u.topup_access,
         u.created_at,
         u.balance_cents,
         COALESCE((
@@ -164,28 +177,34 @@ export async function adminUserRoutes(app: FastifyInstance) {
       FROM users u
       WHERE u.deleted_at IS NULL
       ORDER BY name ASC
-    `).all();
+    `,
+            )
+            .all();
 
-    return {
-      users: users.map((user: any) => ({
-        ...user,
-        balance_cents: Number(user.balance_cents ?? 0),
-        local_access: Number(user.local_access ?? 0),
-        badge_uids: String(user.badge_uids || "")
-          .split("\n")
-          .map((value) => value.trim())
-          .filter(Boolean),
-      })),
-    };
-  });
+        return {
+            users: users.map((user: any) => ({
+                ...user,
+                balance_cents: Number(user.balance_cents ?? 0),
+                local_access: Number(user.local_access ?? 0),
+                badge_uids: String(user.badge_uids || "")
+                    .split("\n")
+                    .map((value) => value.trim())
+                    .filter(Boolean),
+            })),
+        };
+    });
 
-  app.get("/api/admin/users/export.csv", async (req, reply) => {
-    try { requireAdmin(req); } catch (e: any) {
-      return reply.code(e.statusCode ?? 500).send({ error: e.message });
-    }
+    app.get("/api/admin/users/export.csv", async (req, reply) => {
+        try {
+            requireAdmin(req);
+        } catch (e: any) {
+            return reply.code(e.statusCode ?? 500).send({ error: e.message });
+        }
 
-    const db = getDB();
-    const rows = db.prepare(`
+        const db = getDB();
+        const rows = db
+            .prepare(
+                `
       SELECT
         u.id,
         u.name,
@@ -208,539 +227,705 @@ export async function adminUserRoutes(app: FastifyInstance) {
       FROM users u
       WHERE u.deleted_at IS NULL
       ORDER BY u.name ASC
-    `).all() as Array<{
-      id: number;
-      name: string;
-      email: string | null;
-      is_active: number;
-      local_access: number;
-      balance_cents: number;
-      rfid_uid: string | null;
-      created_at: string;
-      deleted_at: string | null;
-      badge_uids: string;
-    }>;
+    `,
+            )
+            .all() as Array<{
+            id: number;
+            name: string;
+            email: string | null;
+            is_active: number;
+            local_access: number;
+            balance_cents: number;
+            rfid_uid: string | null;
+            created_at: string;
+            deleted_at: string | null;
+            badge_uids: string;
+        }>;
 
-    const headers = [
-      "id",
-      "name",
-      "email",
-      "is_active",
-      "local_access",
-      "balance_cents",
-      "rfid_uid",
-      "badge_uids",
-      "created_at",
-      "deleted_at",
-    ];
+        const headers = [
+            "id",
+            "name",
+            "email",
+            "is_active",
+            "local_access",
+            "balance_cents",
+            "rfid_uid",
+            "badge_uids",
+            "created_at",
+            "deleted_at",
+        ];
 
-    const lines = [headers.join(",")];
-    for (const row of rows) {
-      lines.push([
-        String(row.id),
-        csvEscape(row.name ?? ""),
-        csvEscape(row.email ?? ""),
-        String(Number(row.is_active ?? 0)),
-        String(Number(row.local_access ?? 0)),
-        String(Number(row.balance_cents ?? 0)),
-        csvEscape(row.rfid_uid ?? ""),
-        csvEscape(row.badge_uids ?? ""),
-        csvEscape(row.created_at ?? ""),
-        csvEscape(row.deleted_at ?? ""),
-      ].join(","));
-    }
+        const lines = [headers.join(",")];
+        for (const row of rows) {
+            lines.push(
+                [
+                    String(row.id),
+                    csvEscape(row.name ?? ""),
+                    csvEscape(row.email ?? ""),
+                    String(Number(row.is_active ?? 0)),
+                    String(Number(row.local_access ?? 0)),
+                    String(Number(row.balance_cents ?? 0)),
+                    csvEscape(row.rfid_uid ?? ""),
+                    csvEscape(row.badge_uids ?? ""),
+                    csvEscape(row.created_at ?? ""),
+                    csvEscape(row.deleted_at ?? ""),
+                ].join(","),
+            );
+        }
 
-    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    reply.header("Content-Type", "text/csv; charset=utf-8");
-    reply.header("Content-Disposition", `attachment; filename=\"users-${stamp}.csv\"`);
-    return reply.send(lines.join("\n"));
-  });
+        const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+        reply.header("Content-Type", "text/csv; charset=utf-8");
+        reply.header(
+            "Content-Disposition",
+            `attachment; filename=\"users-${stamp}.csv\"`,
+        );
+        return reply.send(lines.join("\n"));
+    });
 
-  app.post("/api/admin/users/import", async (req, reply) => {
-    try { requireAdmin(req); } catch (e: any) {
-      return reply.code(e.statusCode ?? 500).send({ error: e.message });
-    }
+    app.post("/api/admin/users/import", async (req, reply) => {
+        try {
+            requireAdmin(req);
+        } catch (e: any) {
+            return reply.code(e.statusCode ?? 500).send({ error: e.message });
+        }
 
-    const body = z.object({
-      csv: z.string().min(1),
-    }).safeParse(req.body);
+        const body = z
+            .object({
+                csv: z.string().min(1),
+            })
+            .safeParse(req.body);
 
-    if (!body.success) {
-      return reply.code(400).send({ error: "Invalid payload" });
-    }
+        if (!body.success) {
+            return reply.code(400).send({ error: "Invalid payload" });
+        }
 
-    const rows = parseCsv(body.data.csv);
-    if (rows.length < 2) {
-      return reply.code(400).send({ error: "CSV vide ou incomplet" });
-    }
+        const rows = parseCsv(body.data.csv);
+        if (rows.length < 2) {
+            return reply.code(400).send({ error: "CSV vide ou incomplet" });
+        }
 
-    const headerRow = rows[0] ?? [];
-    const header = headerRow.map((value) => value.trim().toLowerCase());
-    const requiredColumns = ["name", "email"];
-    for (const col of requiredColumns) {
-      if (!header.includes(col)) {
-        return reply.code(400).send({ error: `Colonne obligatoire manquante: ${col}` });
-      }
-    }
+        const headerRow = rows[0] ?? [];
+        const header = headerRow.map((value) => value.trim().toLowerCase());
+        const requiredColumns = ["name", "email"];
+        for (const col of requiredColumns) {
+            if (!header.includes(col)) {
+                return reply
+                    .code(400)
+                    .send({ error: `Colonne obligatoire manquante: ${col}` });
+            }
+        }
 
-    const db = getDB();
-    const counters = { created: 0, updated: 0, skipped: 0 };
-    const errors: Array<{ line: number; error: string }> = [];
+        const db = getDB();
+        const counters = { created: 0, updated: 0, skipped: 0 };
+        const errors: Array<{ line: number; error: string }> = [];
 
-    const createUserTx = db.transaction((record: {
-      id?: number;
-      name: string;
-      email: string;
-      is_active: number;
-      local_access: number;
-      balance_cents: number;
-      rfid_uid: string | null;
-      badge_uids: string[];
-    }) => {
-      let userId: number;
-      let mode: "created" | "updated";
+        const createUserTx = db.transaction(
+            (record: {
+                id?: number;
+                name: string;
+                email: string;
+                is_active: number;
+                local_access: number;
+                balance_cents: number;
+                rfid_uid: string | null;
+                badge_uids: string[];
+            }) => {
+                let userId: number;
+                let mode: "created" | "updated";
 
-      if (record.id) {
-        const existing = db.prepare(`
+                if (record.id) {
+                    const existing = db
+                        .prepare(
+                            `
           SELECT id
           FROM users
           WHERE id = ?
-        `).get(record.id) as { id: number } | undefined;
+        `,
+                        )
+                        .get(record.id) as { id: number } | undefined;
 
-        if (existing) {
-          db.prepare(`
+                    if (existing) {
+                        db.prepare(
+                            `
             UPDATE users
             SET name = ?, email = ?, is_active = ?, local_access = ?, balance_cents = ?, rfid_uid = ?, deleted_at = NULL
             WHERE id = ?
-          `).run(
-            record.name,
-            record.email,
-            record.is_active,
-            record.local_access,
-            record.balance_cents,
-            record.rfid_uid,
-            existing.id
-          );
-          userId = existing.id;
-          mode = "updated";
-        } else {
-          const inserted = db.prepare(`
+          `,
+                        ).run(
+                            record.name,
+                            record.email,
+                            record.is_active,
+                            record.local_access,
+                            record.balance_cents,
+                            record.rfid_uid,
+                            existing.id,
+                        );
+                        userId = existing.id;
+                        mode = "updated";
+                    } else {
+                        const inserted = db
+                            .prepare(
+                                `
             INSERT INTO users (id, name, email, rfid_uid, is_active, local_access, balance_cents)
             VALUES (?, ?, ?, ?, ?, ?, ?)
-          `).run(
-            record.id,
-            record.name,
-            record.email,
-            record.rfid_uid,
-            record.is_active,
-            record.local_access,
-            record.balance_cents
-          );
-          userId = Number(inserted.lastInsertRowid);
-          mode = "created";
-        }
-      } else {
-        const inserted = db.prepare(`
+          `,
+                            )
+                            .run(
+                                record.id,
+                                record.name,
+                                record.email,
+                                record.rfid_uid,
+                                record.is_active,
+                                record.local_access,
+                                record.balance_cents,
+                            );
+                        userId = Number(inserted.lastInsertRowid);
+                        mode = "created";
+                    }
+                } else {
+                    const inserted = db
+                        .prepare(
+                            `
           INSERT INTO users (name, email, rfid_uid, is_active, local_access, balance_cents)
           VALUES (?, ?, ?, ?, ?, ?)
-        `).run(
-          record.name,
-          record.email,
-          record.rfid_uid,
-          record.is_active,
-          record.local_access,
-          record.balance_cents
-        );
-        userId = Number(inserted.lastInsertRowid);
-        mode = "created";
-      }
+        `,
+                        )
+                        .run(
+                            record.name,
+                            record.email,
+                            record.rfid_uid,
+                            record.is_active,
+                            record.local_access,
+                            record.balance_cents,
+                        );
+                    userId = Number(inserted.lastInsertRowid);
+                    mode = "created";
+                }
 
-      db.prepare(`DELETE FROM user_badges WHERE user_id = ?`).run(userId);
-      for (const uid of record.badge_uids) {
-        db.prepare(`
+                db.prepare(`DELETE FROM user_badges WHERE user_id = ?`).run(
+                    userId,
+                );
+                for (const uid of record.badge_uids) {
+                    db.prepare(
+                        `
           INSERT INTO user_badges (user_id, uid)
           VALUES (?, ?)
-        `).run(userId, uid);
-      }
+        `,
+                    ).run(userId, uid);
+                }
 
-      if (!record.rfid_uid && record.badge_uids.length > 0) {
-        db.prepare(`UPDATE users SET rfid_uid = ? WHERE id = ?`).run(record.badge_uids[0], userId);
-      }
+                if (!record.rfid_uid && record.badge_uids.length > 0) {
+                    db.prepare(
+                        `UPDATE users SET rfid_uid = ? WHERE id = ?`,
+                    ).run(record.badge_uids[0], userId);
+                }
 
-      return mode;
-    });
+                return mode;
+            },
+        );
 
-    const parseEmail = z.string().email();
+        const parseEmail = z.string().email();
 
-    for (let index = 1; index < rows.length; index += 1) {
-      const lineNumber = index + 1;
-      const row = rows[index] ?? [];
-      const record: Record<string, string> = {};
-      header.forEach((key, colIdx) => {
-        record[key] = String(row[colIdx] ?? "").trim();
-      });
+        for (let index = 1; index < rows.length; index += 1) {
+            const lineNumber = index + 1;
+            const row = rows[index] ?? [];
+            const record: Record<string, string> = {};
+            header.forEach((key, colIdx) => {
+                record[key] = String(row[colIdx] ?? "").trim();
+            });
 
-      if (Object.values(record).every((value) => value === "")) {
-        counters.skipped += 1;
-        continue;
-      }
+            if (Object.values(record).every((value) => value === "")) {
+                counters.skipped += 1;
+                continue;
+            }
 
-      try {
-        const name = record.name?.trim() ?? "";
-        const email = parseEmail.parse(record.email?.trim() ?? "");
-        if (!name) throw new Error("Nom manquant");
+            try {
+                const name = record.name?.trim() ?? "";
+                const email = parseEmail.parse(record.email?.trim() ?? "");
+                if (!name) throw new Error("Nom manquant");
 
-        const id = record.id ? Number(record.id) : undefined;
-        if (id !== undefined && (!Number.isInteger(id) || id <= 0)) {
-          throw new Error("id invalide");
+                const id = record.id ? Number(record.id) : undefined;
+                if (id !== undefined && (!Number.isInteger(id) || id <= 0)) {
+                    throw new Error("id invalide");
+                }
+
+                const is_active = parseBooleanFlag(record.is_active, 1);
+                const local_access = parseBooleanFlag(record.local_access, 0);
+
+                const balance_cents = record.balance_cents
+                    ? Number(record.balance_cents)
+                    : 0;
+                if (
+                    !Number.isFinite(balance_cents) ||
+                    !Number.isInteger(balance_cents)
+                ) {
+                    throw new Error("balance_cents invalide");
+                }
+
+                const normalizedRfid = record.rfid_uid
+                    ? normUid(record.rfid_uid)
+                    : null;
+                const importedBadges = (record.badge_uids ?? "")
+                    .split("|")
+                    .map((value) => value.trim())
+                    .filter(Boolean)
+                    .map((value) => normUid(value));
+
+                const badgeSet = new Set(importedBadges);
+                if (normalizedRfid) badgeSet.add(normalizedRfid);
+                const badge_uids = Array.from(badgeSet);
+
+                const payload = {
+                    ...(id !== undefined ? { id } : {}),
+                    name,
+                    email,
+                    is_active,
+                    local_access,
+                    balance_cents,
+                    rfid_uid: normalizedRfid,
+                    badge_uids,
+                };
+
+                const result = createUserTx(payload);
+
+                if (result === "created") counters.created += 1;
+                if (result === "updated") counters.updated += 1;
+            } catch (error: unknown) {
+                const message = String((error as Error)?.message ?? error);
+                errors.push({ line: lineNumber, error: message });
+            }
         }
 
-        const is_active = parseBooleanFlag(record.is_active, 1);
-        const local_access = parseBooleanFlag(record.local_access, 0);
+        return reply.send({
+            ok: true,
+            ...counters,
+            failed: errors.length,
+            errors,
+        });
+    });
 
-        const balance_cents = record.balance_cents ? Number(record.balance_cents) : 0;
-        if (!Number.isFinite(balance_cents) || !Number.isInteger(balance_cents)) {
-          throw new Error("balance_cents invalide");
+    // CREATE USER
+    app.post("/api/admin/users", async (req, reply) => {
+        try {
+            requireAdmin(req);
+        } catch (e: any) {
+            return reply.code(e.statusCode ?? 500).send({ error: e.message });
         }
 
-        const normalizedRfid = record.rfid_uid ? normUid(record.rfid_uid) : null;
-        const importedBadges = (record.badge_uids ?? "")
-          .split("|")
-          .map((value) => value.trim())
-          .filter(Boolean)
-          .map((value) => normUid(value));
+        const schema = z.object({
+            name: z.string().min(1),
+            email: z.string().email(),
+            is_active: z.boolean().optional().default(true),
+            local_access: z.boolean().optional().default(false),
+            rfid_uid: z.string().optional().or(z.literal("")).optional(), // optionnel
+        });
 
-        const badgeSet = new Set(importedBadges);
-        if (normalizedRfid) badgeSet.add(normalizedRfid);
-        const badge_uids = Array.from(badgeSet);
+        const parsed = schema.safeParse(req.body);
+        if (!parsed.success)
+            return reply.code(400).send({ error: "Invalid payload" });
 
-        const payload = {
-          ...(id !== undefined ? { id } : {}),
-          name,
-          email,
-          is_active,
-          local_access,
-          balance_cents,
-          rfid_uid: normalizedRfid,
-          badge_uids,
-        };
+        const name = parsed.data.name.trim();
+        const email = parsed.data.email.trim();
+        const is_active = parsed.data.is_active ? 1 : 0;
+        const local_access = parsed.data.local_access ? 1 : 0;
+        const rfid_uid = parsed.data.rfid_uid
+            ? normUid(parsed.data.rfid_uid)
+            : null;
 
-        const result = createUserTx(payload);
+        const db = getDB();
 
-        if (result === "created") counters.created += 1;
-        if (result === "updated") counters.updated += 1;
-      } catch (error: unknown) {
-        const message = String((error as Error)?.message ?? error);
-        errors.push({ line: lineNumber, error: message });
-      }
-    }
-
-    return reply.send({
-      ok: true,
-      ...counters,
-      failed: errors.length,
-      errors,
-    });
-  });
-
-  // CREATE USER
-  app.post("/api/admin/users", async (req, reply) => {
-    try { requireAdmin(req); } catch (e: any) {
-      return reply.code(e.statusCode ?? 500).send({ error: e.message });
-    }
-
-    const schema = z.object({
-      name: z.string().min(1),
-      email: z.string().email(),
-      is_active: z.boolean().optional().default(true),
-      local_access: z.boolean().optional().default(false),
-      rfid_uid: z.string().optional().or(z.literal("")).optional(), // optionnel
-    });
-
-    const parsed = schema.safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: "Invalid payload" });
-
-    const name = parsed.data.name.trim();
-    const email = parsed.data.email.trim();
-    const is_active = parsed.data.is_active ? 1 : 0;
-    const local_access = parsed.data.local_access ? 1 : 0;
-    const rfid_uid = parsed.data.rfid_uid ? normUid(parsed.data.rfid_uid) : null;
-
-    const db = getDB();
-
-    try {
-      const tx = db.transaction(() => {
-        const result = db.prepare(`
+        try {
+            const tx = db.transaction(() => {
+                const result = db
+                    .prepare(
+                        `
           INSERT INTO users (name, email, rfid_uid, is_active, local_access, balance_cents)
           VALUES (?, ?, ?, ?, ?, 0)
-        `).run(name, email, rfid_uid, is_active, local_access);
+        `,
+                    )
+                    .run(name, email, rfid_uid, is_active, local_access);
 
-        const userId = Number(result.lastInsertRowid);
+                const userId = Number(result.lastInsertRowid);
 
-        if (rfid_uid) {
-          db.prepare(`
+                if (rfid_uid) {
+                    db.prepare(
+                        `
             INSERT INTO user_badges (user_id, uid)
             VALUES (?, ?)
-          `).run(userId, rfid_uid);
+          `,
+                    ).run(userId, rfid_uid);
+                }
+
+                return userId;
+            });
+
+            return reply.send({ ok: true, user_id: tx() });
+        } catch (e: any) {
+            const msg = String(e?.message || e);
+
+            if (
+                msg.includes("UNIQUE") &&
+                (msg.includes("rfid_uid") || msg.includes("user_badges.uid"))
+            ) {
+                return reply.code(409).send({
+                    error: "Badge déjà utilisé par un autre utilisateur",
+                });
+            }
+
+            return reply.code(500).send({ error: "Internal error" });
         }
-
-        return userId;
-      });
-
-      return reply.send({ ok: true, user_id: tx() });
-    } catch (e: any) {
-      const msg = String(e?.message || e);
-
-      if (msg.includes("UNIQUE") && (msg.includes("rfid_uid") || msg.includes("user_badges.uid"))) {
-        return reply.code(409).send({ error: "Badge déjà utilisé par un autre utilisateur" });
-      }
-
-      return reply.code(500).send({ error: "Internal error" });
-    }
-  });
-
-  // UPDATE USER (name/email/is_active)
-  app.patch("/api/admin/users/:id", async (req, reply) => {
-    try { requireAdmin(req); } catch (e: any) {
-      return reply.code(e.statusCode ?? 500).send({ error: e.message });
-    }
-
-    const paramsSchema = z.object({ id: z.coerce.number().int().positive() });
-    const bodySchema = z.object({
-      name: z.string().min(1).optional(),
-      email: z.string().email().optional(),
-      is_active: z.boolean().optional(),
-      local_access: z.boolean().optional(),
     });
 
-    const p = paramsSchema.safeParse(req.params);
-    const b = bodySchema.safeParse(req.body);
-    if (!p.success || !b.success) return reply.code(400).send({ error: "Invalid payload" });
+    // UPDATE USER (name/email/is_active)
+    app.patch("/api/admin/users/:id", async (req, reply) => {
+        try {
+            requireAdmin(req);
+        } catch (e: any) {
+            return reply.code(e.statusCode ?? 500).send({ error: e.message });
+        }
 
-    const db = getDB();
-    const { id } = p.data;
+        const paramsSchema = z.object({
+            id: z.coerce.number().int().positive(),
+        });
+        const bodySchema = z.object({
+            name: z.string().min(1).optional(),
+            email: z.string().email().optional(),
+            is_active: z.boolean().optional(),
+            local_access: z.boolean().optional(),
+            topup_access: z.boolean().optional(),
+        });
 
-    const existing = db.prepare(`SELECT id FROM users WHERE id=? AND deleted_at IS NULL`).get(id);
-    if (!existing) return reply.code(404).send({ error: "User not found" });
+        const p = paramsSchema.safeParse(req.params);
+        const b = bodySchema.safeParse(req.body);
+        if (!p.success || !b.success)
+            return reply.code(400).send({ error: "Invalid payload" });
 
-    const updates: string[] = [];
-    const args: any[] = [];
+        const db = getDB();
+        const { id } = p.data;
 
-    if (b.data.name !== undefined) { updates.push("name=?"); args.push(b.data.name.trim()); }
-    if (b.data.email !== undefined) { updates.push("email=?"); args.push(b.data.email.trim()); }
-    if (b.data.is_active !== undefined) { updates.push("is_active=?"); args.push(b.data.is_active ? 1 : 0); }
-    if (b.data.local_access !== undefined) { updates.push("local_access=?"); args.push(b.data.local_access ? 1 : 0); }
+        const existing = db
+            .prepare(`SELECT id FROM users WHERE id=? AND deleted_at IS NULL`)
+            .get(id);
+        if (!existing) return reply.code(404).send({ error: "User not found" });
 
-    if (updates.length === 0) return reply.send({ ok: true });
+        const updates: string[] = [];
+        const args: any[] = [];
 
-    args.push(id);
-    db.prepare(`UPDATE users SET ${updates.join(", ")} WHERE id=?`).run(...args);
-    return reply.send({ ok: true });
-  });
+        if (b.data.name !== undefined) {
+            updates.push("name=?");
+            args.push(b.data.name.trim());
+        }
+        if (b.data.email !== undefined) {
+            updates.push("email=?");
+            args.push(b.data.email.trim());
+        }
+        if (b.data.is_active !== undefined) {
+            updates.push("is_active=?");
+            args.push(b.data.is_active ? 1 : 0);
+        }
+        if (b.data.local_access !== undefined) {
+            updates.push("local_access=?");
+            args.push(b.data.local_access ? 1 : 0);
+        }
+        if (b.data.topup_access !== undefined) {
+            updates.push("topup_access=?");
+            args.push(b.data.topup_access ? 1 : 0);
+        }
 
-  // ADD BADGE
-  app.post("/api/admin/users/:id/badge", async (req, reply) => {
-    try { requireAdmin(req); } catch (e: any) {
-      return reply.code(e.statusCode ?? 500).send({ error: e.message });
-    }
+        if (updates.length === 0) return reply.send({ ok: true });
 
-    const paramsSchema = z.object({ id: z.coerce.number().int().positive() });
-    const bodySchema = z.object({ rfid_uid: z.string().min(1) });
+        args.push(id);
+        db.prepare(`UPDATE users SET ${updates.join(", ")} WHERE id=?`).run(
+            ...args,
+        );
+        return reply.send({ ok: true });
+    });
 
-    const p = paramsSchema.safeParse(req.params);
-    const b = bodySchema.safeParse(req.body);
-    if (!p.success || !b.success) return reply.code(400).send({ error: "Invalid payload" });
+    // ADD BADGE
+    app.post("/api/admin/users/:id/badge", async (req, reply) => {
+        try {
+            requireAdmin(req);
+        } catch (e: any) {
+            return reply.code(e.statusCode ?? 500).send({ error: e.message });
+        }
 
-    const { id } = p.data;
-    const uid = normUid(b.data.rfid_uid);
+        const paramsSchema = z.object({
+            id: z.coerce.number().int().positive(),
+        });
+        const bodySchema = z.object({ rfid_uid: z.string().min(1) });
 
-    const db = getDB();
-    const user = db.prepare(`SELECT id, rfid_uid FROM users WHERE id=? AND deleted_at IS NULL`).get(id) as any;
-    if (!user) return reply.code(404).send({ error: "User not found" });
+        const p = paramsSchema.safeParse(req.params);
+        const b = bodySchema.safeParse(req.body);
+        if (!p.success || !b.success)
+            return reply.code(400).send({ error: "Invalid payload" });
 
-    try {
-      const tx = db.transaction(() => {
-        db.prepare(`
+        const { id } = p.data;
+        const uid = normUid(b.data.rfid_uid);
+
+        const db = getDB();
+        const user = db
+            .prepare(
+                `SELECT id, rfid_uid FROM users WHERE id=? AND deleted_at IS NULL`,
+            )
+            .get(id) as any;
+        if (!user) return reply.code(404).send({ error: "User not found" });
+
+        try {
+            const tx = db.transaction(() => {
+                db.prepare(
+                    `
           INSERT INTO user_badges (user_id, uid)
           VALUES (?, ?)
-        `).run(id, uid);
+        `,
+                ).run(id, uid);
 
-        if (!user.rfid_uid) {
-          db.prepare(`UPDATE users SET rfid_uid=? WHERE id=?`).run(uid, id);
-        }
-      });
+                if (!user.rfid_uid) {
+                    db.prepare(`UPDATE users SET rfid_uid=? WHERE id=?`).run(
+                        uid,
+                        id,
+                    );
+                }
+            });
 
-      tx();
+            tx();
 
-      const badges = db.prepare(`
+            const badges = db
+                .prepare(
+                    `
         SELECT uid
         FROM user_badges
         WHERE user_id = ?
         ORDER BY created_at ASC, id ASC
-      `).all(id) as Array<{ uid: string }>;
+      `,
+                )
+                .all(id) as Array<{ uid: string }>;
 
-      return reply.send({ ok: true, badge_uids: badges.map((badge) => badge.uid) });
-    } catch (e: any) {
-      const msg = String(e?.message || e);
-      if (msg.includes("UNIQUE") && (msg.includes("rfid_uid") || msg.includes("user_badges.uid"))) {
-        return reply.code(409).send({ error: "Badge déjà utilisé par un autre utilisateur" });
-      }
-      return reply.code(500).send({ error: "Internal error" });
-    }
-  });
+            return reply.send({
+                ok: true,
+                badge_uids: badges.map((badge) => badge.uid),
+            });
+        } catch (e: any) {
+            const msg = String(e?.message || e);
+            if (
+                msg.includes("UNIQUE") &&
+                (msg.includes("rfid_uid") || msg.includes("user_badges.uid"))
+            ) {
+                return reply.code(409).send({
+                    error: "Badge déjà utilisé par un autre utilisateur",
+                });
+            }
+            return reply.code(500).send({ error: "Internal error" });
+        }
+    });
 
-  // REMOVE BADGE
-  app.delete("/api/admin/users/:id/badge", async (req, reply) => {
-    try { requireAdmin(req); } catch (e: any) {
-      return reply.code(e.statusCode ?? 500).send({ error: e.message });
-    }
+    // REMOVE BADGE
+    app.delete("/api/admin/users/:id/badge", async (req, reply) => {
+        try {
+            requireAdmin(req);
+        } catch (e: any) {
+            return reply.code(e.statusCode ?? 500).send({ error: e.message });
+        }
 
-    const paramsSchema = z.object({ id: z.coerce.number().int().positive() });
-    const bodySchema = z.object({ rfid_uid: z.string().min(1) });
+        const paramsSchema = z.object({
+            id: z.coerce.number().int().positive(),
+        });
+        const bodySchema = z.object({ rfid_uid: z.string().min(1) });
 
-    const p = paramsSchema.safeParse(req.params);
-    const b = bodySchema.safeParse(req.body);
-    if (!p.success || !b.success) return reply.code(400).send({ error: "Invalid payload" });
+        const p = paramsSchema.safeParse(req.params);
+        const b = bodySchema.safeParse(req.body);
+        if (!p.success || !b.success)
+            return reply.code(400).send({ error: "Invalid payload" });
 
-    const { id } = p.data;
-    const uid = normUid(b.data.rfid_uid);
-    const db = getDB();
+        const { id } = p.data;
+        const uid = normUid(b.data.rfid_uid);
+        const db = getDB();
 
-    const user = db.prepare(`SELECT id, rfid_uid FROM users WHERE id=? AND deleted_at IS NULL`).get(id) as any;
-    if (!user) return reply.code(404).send({ error: "User not found" });
+        const user = db
+            .prepare(
+                `SELECT id, rfid_uid FROM users WHERE id=? AND deleted_at IS NULL`,
+            )
+            .get(id) as any;
+        if (!user) return reply.code(404).send({ error: "User not found" });
 
-    const existing = db.prepare(`
+        const existing = db
+            .prepare(
+                `
       SELECT id FROM user_badges WHERE user_id = ? AND uid = ?
-    `).get(id, uid) as any;
-    if (!existing) return reply.code(404).send({ error: "Badge not found" });
+    `,
+            )
+            .get(id, uid) as any;
+        if (!existing)
+            return reply.code(404).send({ error: "Badge not found" });
 
-    const tx = db.transaction(() => {
-      db.prepare(`DELETE FROM user_badges WHERE user_id = ? AND uid = ?`).run(id, uid);
+        const tx = db.transaction(() => {
+            db.prepare(
+                `DELETE FROM user_badges WHERE user_id = ? AND uid = ?`,
+            ).run(id, uid);
 
-      if (user.rfid_uid === uid) {
-        const next = db.prepare(`
+            if (user.rfid_uid === uid) {
+                const next = db
+                    .prepare(
+                        `
           SELECT uid FROM user_badges WHERE user_id = ? ORDER BY created_at ASC, id ASC LIMIT 1
-        `).get(id) as any;
-        db.prepare(`UPDATE users SET rfid_uid=? WHERE id=?`).run(next?.uid ?? null, id);
-      }
+        `,
+                    )
+                    .get(id) as any;
+                db.prepare(`UPDATE users SET rfid_uid=? WHERE id=?`).run(
+                    next?.uid ?? null,
+                    id,
+                );
+            }
+        });
+
+        tx();
+        return reply.send({ ok: true });
     });
 
-    tx();
-    return reply.send({ ok: true });
-  });
+    // TOP UP / ADJUST BALANCE
+    app.post("/api/admin/users/:id/topup", async (req, reply) => {
+        try {
+            requireAdmin(req);
+        } catch (e: any) {
+            return reply.code(e.statusCode ?? 500).send({ error: e.message });
+        }
 
-  // TOP UP / ADJUST BALANCE
-  app.post("/api/admin/users/:id/topup", async (req, reply) => {
-    try { requireAdmin(req); } catch (e: any) {
-      return reply.code(e.statusCode ?? 500).send({ error: e.message });
-    }
+        const paramsSchema = z.object({
+            id: z.coerce.number().int().positive(),
+        });
+        const bodySchema = z.object({
+            amount_cents: z
+                .number()
+                .int()
+                .refine((value) => value !== 0, {
+                    message: "amount must be non-zero",
+                }),
+            comment: z.string().trim().min(1),
+            payment_date: paymentDateSchema.optional(),
+            payment_method: paymentMethodSchema.optional(),
+        });
 
-    const paramsSchema = z.object({ id: z.coerce.number().int().positive() });
-    const bodySchema = z.object({
-      amount_cents: z.number().int().refine((value) => value !== 0, { message: "amount must be non-zero" }),
-      comment: z.string().trim().min(1),
-      payment_date: paymentDateSchema.optional(),
-      payment_method: paymentMethodSchema.optional(),
-    });
+        const p = paramsSchema.safeParse(req.params);
+        const b = bodySchema.safeParse(req.body);
+        if (!p.success || !b.success)
+            return reply.code(400).send({ error: "Invalid payload" });
 
-    const p = paramsSchema.safeParse(req.params);
-    const b = bodySchema.safeParse(req.body);
-    if (!p.success || !b.success) return reply.code(400).send({ error: "Invalid payload" });
+        const { id } = p.data;
+        const { amount_cents, comment, payment_date, payment_method } = b.data;
+        const db = getDB();
 
-    const { id } = p.data;
-    const { amount_cents, comment, payment_date, payment_method } = b.data;
-    const db = getDB();
+        if (amount_cents > 0 && (!payment_date || !payment_method)) {
+            return reply.code(400).send({
+                error: "payment_date and payment_method are required for topups",
+            });
+        }
 
-    if (amount_cents > 0 && (!payment_date || !payment_method)) {
-      return reply.code(400).send({ error: "payment_date and payment_method are required for topups" });
-    }
-
-    try {
-      const tx = db.transaction(() => {
-        const user = db.prepare(`
+        try {
+            const tx = db.transaction(() => {
+                const user = db
+                    .prepare(
+                        `
           SELECT id, balance_cents
           FROM users
           WHERE id=? AND deleted_at IS NULL
-        `).get(id) as any;
-        if (!user) throw new Error("USER_NOT_FOUND");
+        `,
+                    )
+                    .get(id) as any;
+                if (!user) throw new Error("USER_NOT_FOUND");
 
-        const nextBalance = Number(user.balance_cents ?? 0) + amount_cents;
-        if (nextBalance < 0) throw new Error("BALANCE_BELOW_ZERO");
+                const nextBalance =
+                    Number(user.balance_cents ?? 0) + amount_cents;
+                if (nextBalance < 0) throw new Error("BALANCE_BELOW_ZERO");
 
-        db.prepare(`
+                db.prepare(
+                    `
           UPDATE users
           SET balance_cents = ?
           WHERE id = ?
-        `).run(nextBalance, id);
+        `,
+                ).run(nextBalance, id);
 
-        const transactionId = randomUUID();
-        db.prepare(`
+                const transactionId = randomUUID();
+                db.prepare(
+                    `
           INSERT INTO account_transactions (
             id, user_id, delta_cents, reason, comment, payment_date, payment_method
           )
           VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).run(
-          transactionId,
-          id,
-          amount_cents,
-          amount_cents > 0 ? "topup" : "adjustment",
-          comment.trim(),
-          amount_cents > 0 ? payment_date : null,
-          amount_cents > 0 ? payment_method : null
-        );
+        `,
+                ).run(
+                    transactionId,
+                    id,
+                    amount_cents,
+                    amount_cents > 0 ? "topup" : "adjustment",
+                    comment.trim(),
+                    amount_cents > 0 ? payment_date : null,
+                    amount_cents > 0 ? payment_method : null,
+                );
 
-        return nextBalance;
-      });
+                return nextBalance;
+            });
 
-      return reply.send({ ok: true, balance_cents: tx() });
-    } catch (e: any) {
-      const msg = String(e?.message || e);
-      if (msg.includes("USER_NOT_FOUND")) return reply.code(404).send({ error: "User not found" });
-      if (msg.includes("BALANCE_BELOW_ZERO")) {
-        return reply.code(409).send({ error: "Balance cannot go below 0" });
-      }
-      return reply.code(500).send({ error: "Internal error" });
-    }
-  });
-
-  app.get("/api/admin/topups", async (req, reply) => {
-    try { requireAdmin(req); } catch (e: any) {
-      return reply.code(e.statusCode ?? 500).send({ error: e.message });
-    }
-
-    const querySchema = z.object({
-      name: z.string().optional(),
-      from: paymentDateSchema.optional(),
-      to: paymentDateSchema.optional(),
-      method: paymentMethodSchema.optional(),
+            return reply.send({ ok: true, balance_cents: tx() });
+        } catch (e: any) {
+            const msg = String(e?.message || e);
+            if (msg.includes("USER_NOT_FOUND"))
+                return reply.code(404).send({ error: "User not found" });
+            if (msg.includes("BALANCE_BELOW_ZERO")) {
+                return reply
+                    .code(409)
+                    .send({ error: "Balance cannot go below 0" });
+            }
+            return reply.code(500).send({ error: "Internal error" });
+        }
     });
 
-    const parsed = querySchema.safeParse(req.query);
-    if (!parsed.success) return reply.code(400).send({ error: "Invalid query" });
+    app.get("/api/admin/topups", async (req, reply) => {
+        try {
+            requireAdmin(req);
+        } catch (e: any) {
+            return reply.code(e.statusCode ?? 500).send({ error: e.message });
+        }
 
-    const where: string[] = ["at.reason = 'topup'", "at.delta_cents > 0", "u.deleted_at IS NULL"];
-    const args: Array<string> = [];
-    const name = parsed.data.name?.trim();
+        const querySchema = z.object({
+            name: z.string().optional(),
+            from: paymentDateSchema.optional(),
+            to: paymentDateSchema.optional(),
+            method: paymentMethodSchema.optional(),
+        });
 
-    if (name) {
-      where.push("LOWER(u.name) LIKE ?");
-      args.push(`%${name.toLowerCase()}%`);
-    }
-    if (parsed.data.from) {
-      where.push("COALESCE(at.payment_date, date(at.created_at)) >= ?");
-      args.push(parsed.data.from);
-    }
-    if (parsed.data.to) {
-      where.push("COALESCE(at.payment_date, date(at.created_at)) <= ?");
-      args.push(parsed.data.to);
-    }
-    if (parsed.data.method) {
-      where.push("at.payment_method = ?");
-      args.push(parsed.data.method);
-    }
+        const parsed = querySchema.safeParse(req.query);
+        if (!parsed.success)
+            return reply.code(400).send({ error: "Invalid query" });
 
-    const db = getDB();
-    const rows = db.prepare(`
+        const where: string[] = [
+            "at.reason = 'topup'",
+            "at.delta_cents > 0",
+            "u.deleted_at IS NULL",
+        ];
+        const args: Array<string> = [];
+        const name = parsed.data.name?.trim();
+
+        if (name) {
+            where.push("LOWER(u.name) LIKE ?");
+            args.push(`%${name.toLowerCase()}%`);
+        }
+        if (parsed.data.from) {
+            where.push("COALESCE(at.payment_date, date(at.created_at)) >= ?");
+            args.push(parsed.data.from);
+        }
+        if (parsed.data.to) {
+            where.push("COALESCE(at.payment_date, date(at.created_at)) <= ?");
+            args.push(parsed.data.to);
+        }
+        if (parsed.data.method) {
+            where.push("at.payment_method = ?");
+            args.push(parsed.data.method);
+        }
+
+        const db = getDB();
+        const rows = db
+            .prepare(
+                `
       SELECT
         at.id,
         at.user_id,
@@ -755,43 +940,53 @@ export async function adminUserRoutes(app: FastifyInstance) {
       JOIN users u ON u.id = at.user_id
       WHERE ${where.join(" AND ")}
       ORDER BY COALESCE(at.payment_date, date(at.created_at)) DESC, at.created_at DESC
-    `).all(...args) as Array<{
-      id: string;
-      user_id: number;
-      user_name: string;
-      user_email: string | null;
-      delta_cents: number;
-      comment: string;
-      payment_date: string | null;
-      payment_method: "bank_transfer" | "cash" | null;
-      created_at: string;
-    }>;
+    `,
+            )
+            .all(...args) as Array<{
+            id: string;
+            user_id: number;
+            user_name: string;
+            user_email: string | null;
+            delta_cents: number;
+            comment: string;
+            payment_date: string | null;
+            payment_method: "bank_transfer" | "cash" | null;
+            created_at: string;
+        }>;
 
-    return reply.send({
-      topups: rows.map((row) => ({
-        ...row,
-        delta_cents: Number(row.delta_cents ?? 0),
-      })),
+        return reply.send({
+            topups: rows.map((row) => ({
+                ...row,
+                delta_cents: Number(row.delta_cents ?? 0),
+            })),
+        });
     });
-  });
 
-  app.get("/api/admin/badge-requests", async (req, reply) => {
-    try { requireAdmin(req); } catch (e: any) {
-      return reply.code(e.statusCode ?? 500).send({ error: e.message });
-    }
+    app.get("/api/admin/badge-requests", async (req, reply) => {
+        try {
+            requireAdmin(req);
+        } catch (e: any) {
+            return reply.code(e.statusCode ?? 500).send({ error: e.message });
+        }
 
-    const querySchema = z.object({
-      status: z.enum(["pending", "approved", "rejected", "all"]).optional().default("pending"),
-    });
-    const parsed = querySchema.safeParse(req.query);
-    if (!parsed.success) return reply.code(400).send({ error: "Invalid query" });
+        const querySchema = z.object({
+            status: z
+                .enum(["pending", "approved", "rejected", "all"])
+                .optional()
+                .default("pending"),
+        });
+        const parsed = querySchema.safeParse(req.query);
+        if (!parsed.success)
+            return reply.code(400).send({ error: "Invalid query" });
 
-    const db = getDB();
-    const args: string[] = [];
-    const where = parsed.data.status === "all" ? "" : "WHERE br.status = ?";
-    if (parsed.data.status !== "all") args.push(parsed.data.status);
+        const db = getDB();
+        const args: string[] = [];
+        const where = parsed.data.status === "all" ? "" : "WHERE br.status = ?";
+        if (parsed.data.status !== "all") args.push(parsed.data.status);
 
-    const requests = db.prepare(`
+        const requests = db
+            .prepare(
+                `
       SELECT
         br.id,
         br.name,
@@ -807,124 +1002,174 @@ export async function adminUserRoutes(app: FastifyInstance) {
       LEFT JOIN users u ON u.id = br.approved_user_id
       ${where}
       ORDER BY br.requested_at DESC
-    `).all(...args);
+    `,
+            )
+            .all(...args);
 
-    return { requests };
-  });
+        return { requests };
+    });
 
-  app.post("/api/admin/badge-requests/:id/approve", async (req, reply) => {
-    try { requireAdmin(req); } catch (e: any) {
-      return reply.code(e.statusCode ?? 500).send({ error: e.message });
-    }
+    app.post("/api/admin/badge-requests/:id/approve", async (req, reply) => {
+        try {
+            requireAdmin(req);
+        } catch (e: any) {
+            return reply.code(e.statusCode ?? 500).send({ error: e.message });
+        }
 
-    const paramsSchema = z.object({ id: z.string().min(1) });
-    const p = paramsSchema.safeParse(req.params);
-    if (!p.success) return reply.code(400).send({ error: "Invalid request id" });
+        const paramsSchema = z.object({ id: z.string().min(1) });
+        const p = paramsSchema.safeParse(req.params);
+        if (!p.success)
+            return reply.code(400).send({ error: "Invalid request id" });
 
-    const db = getDB();
-    const request = db.prepare(`
+        const db = getDB();
+        const request = db
+            .prepare(
+                `
       SELECT id, name, email, uid, normalized_uid, status
       FROM badge_requests
       WHERE id = ?
-    `).get(p.data.id) as {
-      id: string;
-      name: string;
-      email: string;
-      uid: string;
-      normalized_uid: string;
-      status: "pending" | "approved" | "rejected";
-    } | undefined;
+    `,
+            )
+            .get(p.data.id) as
+            | {
+                  id: string;
+                  name: string;
+                  email: string;
+                  uid: string;
+                  normalized_uid: string;
+                  status: "pending" | "approved" | "rejected";
+              }
+            | undefined;
 
-    if (!request) return reply.code(404).send({ error: "Demande introuvable" });
-    if (request.status !== "pending") {
-      return reply.code(409).send({ error: "Cette demande a déjà été traitée" });
-    }
+        if (!request)
+            return reply.code(404).send({ error: "Demande introuvable" });
+        if (request.status !== "pending") {
+            return reply
+                .code(409)
+                .send({ error: "Cette demande a déjà été traitée" });
+        }
 
-    const uidCandidates = badgeMatchCandidates(request.uid);
-    const existingUser = db
-      .prepare(badgeExistsSql(uidCandidates.length))
-      .get(...uidCandidates, ...uidCandidates);
+        const uidCandidates = badgeMatchCandidates(request.uid);
+        const existingUser = db
+            .prepare(badgeExistsSql(uidCandidates.length))
+            .get(...uidCandidates, ...uidCandidates);
 
-    if (existingUser) {
-      return reply.code(409).send({ error: "Ce badge est déjà lié à un compte." });
-    }
+        if (existingUser) {
+            return reply
+                .code(409)
+                .send({ error: "Ce badge est déjà lié à un compte." });
+        }
 
-    try {
-      const tx = db.transaction(() => {
-        const result = db.prepare(`
+        try {
+            const tx = db.transaction(() => {
+                const result = db
+                    .prepare(
+                        `
           INSERT INTO users (name, email, rfid_uid, is_active, balance_cents)
           VALUES (?, ?, ?, 1, 0)
-        `).run(request.name.trim(), request.email.trim(), request.normalized_uid);
+        `,
+                    )
+                    .run(
+                        request.name.trim(),
+                        request.email.trim(),
+                        request.normalized_uid,
+                    );
 
-        const userId = Number(result.lastInsertRowid);
+                const userId = Number(result.lastInsertRowid);
 
-        db.prepare(`
+                db.prepare(
+                    `
           INSERT INTO user_badges (user_id, uid)
           VALUES (?, ?)
-        `).run(userId, request.normalized_uid);
+        `,
+                ).run(userId, request.normalized_uid);
 
-        db.prepare(`
+                db.prepare(
+                    `
           UPDATE badge_requests
           SET status = 'approved',
               reviewed_at = datetime('now'),
               approved_user_id = ?
           WHERE id = ?
-        `).run(userId, request.id);
+        `,
+                ).run(userId, request.id);
 
-        return userId;
-      });
+                return userId;
+            });
 
-      return reply.send({ ok: true, user_id: tx() });
-    } catch (e: any) {
-      const msg = String(e?.message || e);
-      if (msg.includes("UNIQUE") && (msg.includes("rfid_uid") || msg.includes("user_badges.uid"))) {
-        return reply.code(409).send({ error: "Badge déjà utilisé par un autre utilisateur" });
-      }
-      req.log.error({ error: e }, "badge request approval failed");
-      return reply.code(500).send({ error: "Impossible d'approuver la demande." });
-    }
-  });
+            return reply.send({ ok: true, user_id: tx() });
+        } catch (e: any) {
+            const msg = String(e?.message || e);
+            if (
+                msg.includes("UNIQUE") &&
+                (msg.includes("rfid_uid") || msg.includes("user_badges.uid"))
+            ) {
+                return reply.code(409).send({
+                    error: "Badge déjà utilisé par un autre utilisateur",
+                });
+            }
+            req.log.error({ error: e }, "badge request approval failed");
+            return reply
+                .code(500)
+                .send({ error: "Impossible d'approuver la demande." });
+        }
+    });
 
-  app.post("/api/admin/badge-requests/:id/reject", async (req, reply) => {
-    try { requireAdmin(req); } catch (e: any) {
-      return reply.code(e.statusCode ?? 500).send({ error: e.message });
-    }
+    app.post("/api/admin/badge-requests/:id/reject", async (req, reply) => {
+        try {
+            requireAdmin(req);
+        } catch (e: any) {
+            return reply.code(e.statusCode ?? 500).send({ error: e.message });
+        }
 
-    const paramsSchema = z.object({ id: z.string().min(1) });
-    const p = paramsSchema.safeParse(req.params);
-    if (!p.success) return reply.code(400).send({ error: "Invalid request id" });
+        const paramsSchema = z.object({ id: z.string().min(1) });
+        const p = paramsSchema.safeParse(req.params);
+        if (!p.success)
+            return reply.code(400).send({ error: "Invalid request id" });
 
-    const db = getDB();
-    const result = db.prepare(`
+        const db = getDB();
+        const result = db
+            .prepare(
+                `
       UPDATE badge_requests
       SET status = 'rejected',
           reviewed_at = datetime('now')
       WHERE id = ?
         AND status = 'pending'
-    `).run(p.data.id);
+    `,
+            )
+            .run(p.data.id);
 
-    if (result.changes === 0) {
-      return reply.code(404).send({ error: "Demande en attente introuvable" });
+        if (result.changes === 0) {
+            return reply
+                .code(404)
+                .send({ error: "Demande en attente introuvable" });
+        }
+
+        return reply.send({ ok: true });
+    });
+
+    async function handleDeleteUser(req: any, reply: any) {
+        try {
+            requireAdmin(req);
+        } catch (e: any) {
+            return reply.code(e.statusCode ?? 500).send({ error: e.message });
+        }
+
+        const paramsSchema = z.object({
+            id: z.coerce.number().int().positive(),
+        });
+        const p = paramsSchema.safeParse(req.params);
+        if (!p.success)
+            return reply.code(400).send({ error: "Invalid user id" });
+
+        const result = await softDeleteUser(p.data.id);
+        if ("error" in result)
+            return reply.code(result.status).send({ error: result.error });
+        return reply.send(result);
     }
 
-    return reply.send({ ok: true });
-  });
-
-  async function handleDeleteUser(req: any, reply: any) {
-    try { requireAdmin(req); } catch (e: any) {
-      return reply.code(e.statusCode ?? 500).send({ error: e.message });
-    }
-
-    const paramsSchema = z.object({ id: z.coerce.number().int().positive() });
-    const p = paramsSchema.safeParse(req.params);
-    if (!p.success) return reply.code(400).send({ error: "Invalid user id" });
-
-    const result = await softDeleteUser(p.data.id);
-    if ("error" in result) return reply.code(result.status).send({ error: result.error });
-    return reply.send(result);
-  }
-
-  // SOFT DELETE USER
-  app.delete("/api/admin/users/:id", handleDeleteUser);
-  app.post("/api/admin/users/:id/delete", handleDeleteUser);
+    // SOFT DELETE USER
+    app.delete("/api/admin/users/:id", handleDeleteUser);
+    app.post("/api/admin/users/:id/delete", handleDeleteUser);
 }
