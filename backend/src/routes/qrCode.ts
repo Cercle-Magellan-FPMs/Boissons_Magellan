@@ -642,6 +642,44 @@ export async function qrCodeRoutes(app: FastifyInstance) {
         return reply.send({ ok: true });
     });
 
+    app.delete("/api/admin/qr-code/:id", async (req, reply) => {
+        try {
+            requireAdmin(req);
+        } catch (e: any) {
+            return reply.code(e.statusCode ?? 500).send({ error: e.message });
+        }
+
+        const params = z
+            .object({ id: z.coerce.number().int().positive() })
+            .safeParse(req.params);
+        if (!params.success)
+            return reply.code(400).send({ error: "Invalid payload" });
+
+        const db = getDB();
+
+        let deleted = false;
+        const paymentExists = db
+            .prepare(`SELECT id FROM qr_code_payments WHERE id = ?`)
+            .get(params.data.id);
+        if (paymentExists) {
+            db.prepare(`DELETE FROM qr_code_payments WHERE id = ?`).run(params.data.id);
+            deleted = true;
+        } else {
+            const topupExists = db
+                .prepare(`SELECT id FROM topup_qr_requests WHERE id = ?`)
+                .get(params.data.id);
+            if (topupExists) {
+                db.prepare(`DELETE FROM topup_qr_requests WHERE id = ?`).run(params.data.id);
+                deleted = true;
+            }
+        }
+
+        if (!deleted)
+            return reply.code(404).send({ error: "Paiement introuvable" });
+
+        return reply.send({ ok: true });
+    });
+
     app.get("/api/admin/qr-code/settings", async (req, reply) => {
         try {
             requireAdmin(req);

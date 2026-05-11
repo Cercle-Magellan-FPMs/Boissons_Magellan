@@ -115,6 +115,17 @@ export default function QrCodePage() {
         }
     }
 
+    async function deleteRow(row: QrRow) {
+        const label = row.qr_type === "topup" ? "top-up" : "paiement";
+        if (!confirm(`Supprimer ce ${label} de ${row.user_name} (${euros(Number(row.amount_cents ?? 0))}) ?`)) return;
+        try {
+            await api(`/api/admin/qr-code/${row.id}`, { method: "DELETE" });
+            await loadRows();
+        } catch (e: any) {
+            alert(e.message);
+        }
+    }
+
     async function toggleStatus(row: QrRow) {
         const nextStatus =
             row.status === "verified" ? "unverified" : "verified";
@@ -408,6 +419,16 @@ export default function QrCodePage() {
                                 {row.status === "verified"
                                     ? "Marquer pas vérifié"
                                     : "Marquer vérifié"}
+                            </button>
+                            <button
+                                onClick={() => deleteRow(row)}
+                                style={{
+                                    background: "#a33",
+                                    color: "#fff",
+                                    border: "none",
+                                }}
+                            >
+                                🗑️
                             </button>
                         </div>
                     </div>
