@@ -37,7 +37,7 @@ export default function QrCodePage() {
     const [typeFilter, setTypeFilter] = useState<"" | "payment" | "topup">(
         "",
     );
-    const [confirmedFilter, setConfirmedFilter] = useState<string>("1");
+    const [confirmedFilter, setConfirmedFilter] = useState<string>("");
 
     const [settings, setSettings] = useState<QrSettings>({
         recipient_name: "",
