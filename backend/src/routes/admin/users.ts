@@ -176,10 +176,11 @@ export async function adminUserRoutes(app: FastifyInstance) {
         ), '') AS badge_uids
       FROM users u
       WHERE u.deleted_at IS NULL
+        AND u.name != ?
       ORDER BY name ASC
     `,
             )
-            .all();
+            .all(process.env.GUEST_MODE_DEFAULT_NAME || 'Invite');
 
         return {
             users: users.map((user: any) => ({

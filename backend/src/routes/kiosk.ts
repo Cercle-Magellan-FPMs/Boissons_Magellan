@@ -133,7 +133,7 @@ export async function kioskRoutes(app: FastifyInstance) {
             const result = db
                 .prepare(
                     `INSERT OR IGNORE INTO users (name, email, is_active, balance_cents, topup_access, created_at)
-             VALUES (?, NULL, 1, 0, 1, datetime('now'))`,
+             VALUES (?, NULL, 1, 0, 0, datetime('now'))`,
                 )
                 .run(dbName);
 
