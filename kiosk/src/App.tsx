@@ -1162,7 +1162,7 @@ export default function App() {
             )}
             {guestModalOpen && (
                 <div className="payment-modal-backdrop" onClick={() => setGuestModalOpen(false)}>
-                    <div className="payment-modal" onClick={(e) => e.stopPropagation()} style={{ padding: 20, maxWidth: 460 }}>
+                    <div className="payment-modal" onClick={(e) => e.stopPropagation()} style={{ padding: 20, maxWidth: 640, width: "95vw", overflow: "hidden" }}>
                         <h2>👤 Mode invité</h2>
                         <p style={{ opacity: 0.8, marginBottom: 8 }}>Entrez votre prénom :</p>
                         <div style={{
@@ -1178,38 +1178,48 @@ export default function App() {
                         }}>
                             {guestName || " "}
                         </div>
-                        <div className="onscreen-keyboard" aria-label="Clavier">
-                            {[
-                                ["a", "z", "e", "r", "t", "y", "u", "i", "o", "p"],
-                                ["q", "s", "d", "f", "g", "h", "j", "k", "l", "m"],
-                                ["w", "x", "c", "v", "b", "n"],
-                            ].map((row, rowIndex) => (
+                        <div style={{ overflow: "hidden", borderRadius: 18 }}>
+                        <div className="onscreen-keyboard" aria-label="Clavier" style={{ margin: 0 }}>
+                            {badgeRequestKeyboardRows.map((row, rowIndex) => (
                                 <div className="keyboard-row" key={rowIndex}>
-                                    {row.map((key) => (
-                                        <button
-                                            key={key}
-                                            className="keyboard-key"
-                                            onClick={() => setGuestName((prev) => prev + key)}
-                                        >
-                                            {key}
-                                        </button>
-                                    ))}
+                                    {row.map((key) => {
+                                        return (
+                                            <button
+                                                key={key}
+                                                type="button"
+                                                className="keyboard-key"
+                                                onClick={() => setGuestName((prev) => prev + key)}
+                                            >
+                                                {key}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             ))}
                             <div className="keyboard-row keyboard-row-actions">
                                 <button
+                                    type="button"
                                     className="keyboard-key keyboard-wide"
                                     onClick={() => setGuestName((prev) => prev.slice(0, -1))}
                                 >
-                                    ⌫
+                                    Suppr
                                 </button>
                                 <button
+                                    type="button"
                                     className="keyboard-key keyboard-extra-wide"
                                     onClick={() => setGuestName((prev) => prev + " ")}
                                 >
                                     Espace
                                 </button>
+                                <button
+                                    type="button"
+                                    className="keyboard-key keyboard-wide"
+                                    onClick={() => setGuestName("")}
+                                >
+                                    Effacer
+                                </button>
                             </div>
+                        </div>
                         </div>
                         <div className="payment-modal-actions" style={{ marginTop: 12 }}>
                             <button className="ghost-button" onClick={() => setGuestModalOpen(false)}>
