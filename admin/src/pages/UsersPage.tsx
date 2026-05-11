@@ -45,6 +45,7 @@ export default function UsersPage() {
     >("bank_transfer");
     const [csvBusy, setCsvBusy] = useState(false);
     const [expandedUserId, setExpandedUserId] = useState<number | null>(null);
+    const [showLocalAccess, setShowLocalAccess] = useState(false);
 
     function toggleExpand(userId: number) {
         setExpandedUserId((prev) => (prev === userId ? null : userId));
@@ -555,7 +556,8 @@ export default function UsersPage() {
                     borderRadius: 12,
                 }}
             >
-                <h3 style={{ marginTop: 0 }}>Listing accès au local</h3>
+                <h3 onClick={() => setShowLocalAccess((prev) => !prev)} style={{ marginTop: 0, cursor: "pointer", userSelect: "none" }}>🔑 Accès au local ({localAccessUsers.length}) <span style={{ opacity: 0.5, fontSize: "0.8em" }}>{showLocalAccess ? "▲" : "▶"}</span></h3>
+                {showLocalAccess && (
                 <div style={{ display: "grid", gap: 6 }}>
                     {localAccessUsers.map((u) => (
                         <div
@@ -586,6 +588,7 @@ export default function UsersPage() {
                         </p>
                     )}
                 </div>
+                )}
             </div>
 
             <div
