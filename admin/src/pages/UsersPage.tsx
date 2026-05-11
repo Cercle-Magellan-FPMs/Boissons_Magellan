@@ -46,9 +46,39 @@ export default function UsersPage() {
     const [csvBusy, setCsvBusy] = useState(false);
     const [expandedUserId, setExpandedUserId] = useState<number | null>(null);
     const [showLocalAccess, setShowLocalAccess] = useState(false);
+    const [guestModeEnabled, setGuestModeEnabled] = useState(false);
+    const [guestDefaultName, setGuestDefaultName] = useState("Invité");
+    const [guestLoading, setGuestLoading] = useState(false);
 
     function toggleExpand(userId: number) {
         setExpandedUserId((prev) => (prev === userId ? null : userId));
+    }
+
+    async function loadGuestSettings() {
+        try {
+            const data = await api<{ enabled: boolean; default_name: string }>(
+                "/api/admin/guest-mode/settings",
+            );
+            setGuestModeEnabled(data.enabled);
+            setGuestDefaultName(data.default_name || "Invité");
+        } catch {}
+    }
+
+    async function saveGuestSettings() {
+        setGuestLoading(true);
+        try {
+            await api("/api/admin/guest-mode/settings", {
+                method: "PUT",
+                body: JSON.stringify({
+                    enabled: guestModeEnabled,
+                    default_name: guestDefaultName.trim() || "Invité",
+                }),
+            });
+        } catch (e: any) {
+            alert(e.message);
+        } finally {
+            setGuestLoading(false);
+        }
     }
 
     async function load() {
@@ -69,6 +99,7 @@ export default function UsersPage() {
 
     useEffect(() => {
         load();
+        loadGuestSettings();
     }, []);
 
     useEffect(() => {
@@ -471,6 +502,41 @@ export default function UsersPage() {
                         Ajouter
                     </button>
                 </div>
+            </div>
+
+            <div style={{ padding: 12, border: "1px solid #333", borderRadius: 12 }}>
+                <h3 style={{ marginTop: 0 }}>👤 Mode invité</h3>
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+                    <label style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 700 }}>
+                        <input
+                            type="checkbox"
+                            checked={guestModeEnabled}
+                            onChange={(e) => {
+                                setGuestModeEnabled(e.target.checked);
+                            }}
+                        />
+                        Activer le mode invité
+                    </label>
+                    {guestModeEnabled && (
+                        <>
+                            <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                Nom par défaut :
+                                <input
+                                    value={guestDefaultName}
+                                    onChange={(e) => setGuestDefaultName(e.target.value)}
+                                    placeholder="Invité"
+                                    style={{ padding: "4px 8px", width: 140 }}
+                                />
+                            </label>
+                        </>
+                    )}
+                    <button onClick={saveGuestSettings} disabled={guestLoading}>
+                        {guestLoading ? "Sauvegarde..." : "Enregistrer"}
+                    </button>
+                </div>
+                <p style={{ opacity: 0.6, fontSize: "0.85em", marginTop: 8, marginBottom: 0 }}>
+                    Permet aux visiteurs sans badge d'utiliser le kiosk en entrant leur prénom.
+                </p>
             </div>
 
             {error && (

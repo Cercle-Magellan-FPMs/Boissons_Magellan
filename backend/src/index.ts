@@ -14,20 +14,16 @@ import { adminDebtSummaryCurrentRoutes } from "./routes/admin/debtSummaryCurrent
 import { adminClosePeriodRoutes } from "./routes/admin/closePeriod.js";
 import { adminUserRoutes } from "./routes/admin/users.js";
 import { adminEmailSettingsRoutes } from "./routes/admin/emailSettings.js";
+import { adminGuestModeSettingsRoutes } from "./routes/admin/guestModeSettings.js";
 import { qrCodeRoutes } from "./routes/qrCode.js";
 import { adminKioskTabletRoutes } from "./routes/admin/kioskTablet.js";
 
-
 const app = Fastify({ logger: true });
 
-
-
-
 await app.register(cors, {
-  origin: ["http://localhost:5173"],
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    origin: ["http://localhost:5173"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
 });
-
 
 initDB();
 
@@ -43,13 +39,12 @@ app.register(adminDebtSummaryCurrentRoutes);
 app.register(adminClosePeriodRoutes);
 app.register(adminUserRoutes);
 app.register(adminEmailSettingsRoutes);
+app.register(adminGuestModeSettingsRoutes);
 app.register(qrCodeRoutes);
 app.register(adminKioskTabletRoutes);
-
-
 
 const PORT = Number(process.env.PORT) || 3000;
 
 app.listen({ port: PORT, host: "0.0.0.0" }).then(() => {
-  console.log(`Backend running on http://localhost:${PORT}`);
+    console.log(`Backend running on http://localhost:${PORT}`);
 });

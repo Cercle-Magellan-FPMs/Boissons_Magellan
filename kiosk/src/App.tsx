@@ -132,8 +132,44 @@ export default function App() {
         useState<BadgeRequestField>("name");
     const [badgeRequestShift, setBadgeRequestShift] = useState(false);
     const [badgeRequestUidLocked, setBadgeRequestUidLocked] = useState(false);
+    const [guestModeEnabled, setGuestModeEnabled] = useState(false);
+    const [guestModalOpen, setGuestModalOpen] = useState(false);
+    const [guestName, setGuestName] = useState("");
 
     const [products, setProducts] = useState<Product[]>([]);
+
+    useEffect(() => {
+        fetch("/api/kiosk/guest-mode")
+            .then((r) => r.json())
+            .then((d) => setGuestModeEnabled(d.enabled ?? false))
+            .catch(() => {});
+    }, []);
+
+    async function identifyGuest() {
+        const name = guestName.trim();
+        if (!name) return;
+        setStatus("Identification en cours...");
+        try {
+            const res = await fetch("/api/kiosk/identify-guest", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                setStatus(err.error || "Erreur");
+                return;
+            }
+            const data = await res.json();
+            setUser(data.user);
+            setScreen("products");
+            setStatus("");
+            setGuestModalOpen(false);
+            setGuestName("");
+        } catch {
+            setStatus("Erreur reseau");
+        }
+    }
     const [cart, setCart] = useState<Cart>({});
     const [checkoutMessage, setCheckoutMessage] = useState("");
     const [imageErrors, setImageErrors] = useState<Record<string, true>>({});
@@ -825,6 +861,18 @@ export default function App() {
 
                         <h1>Badgez pour commencer</h1>
                         <p className="badge-status">{status}</p>
+                        {guestModeEnabled && (
+                            <button
+                                className="primary-button"
+                                onClick={() => {
+                                    setGuestName("");
+                                    setGuestModalOpen(true);
+                                }}
+                                style={{ background: "#2a5a3a" }}
+                            >
+                                👤 Invité
+                            </button>
+                        )}
                         <button
                             className="primary-button"
                             onClick={() => openBadgeRequestForm()}
@@ -845,7 +893,6 @@ export default function App() {
                                 </p>
                             </div>
                             <div className="header-actions">
-
                                 <button
                                     className="ghost-button"
                                     onClick={requestAccountDetail}
@@ -1114,6 +1161,31 @@ export default function App() {
                     </div>
                 </div>
             )}
+            {guestModalOpen && (
+                <div className="payment-modal-backdrop" onClick={() => setGuestModalOpen(false)}>
+                    <div className="payment-modal" onClick={(e) => e.stopPropagation()} style={{ padding: 20 }}>
+                        <h2>👤 Mode invité</h2>
+                        <p style={{ opacity: 0.8 }}>Entrez votre prénom pour continuer :</p>
+                        <input
+                            autoFocus
+                            value={guestName}
+                            onChange={(e) => setGuestName(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") identifyGuest(); }}
+                            placeholder="Votre prénom"
+                            style={{ padding: "10px", fontSize: "1.1rem", width: "100%" }}
+                        />
+                        <div className="payment-modal-actions" style={{ marginTop: 12 }}>
+                            <button className="ghost-button" onClick={() => setGuestModalOpen(false)}>
+                                Annuler
+                            </button>
+                            <button className="payment-modal-button" onClick={identifyGuest} disabled={!guestName.trim()}>
+                                Continuer
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {badgeRequestOpen && (
                 <div
                     className="badge-request-backdrop"

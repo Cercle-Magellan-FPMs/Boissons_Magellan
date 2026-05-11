@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "crypto";
+import fs from "fs";
+import path from "path";
 import { getDB } from "../db/db.js";
 import { badgeMatchCandidates, normalizeBadgeUid } from "../lib/badgeUid.js";
 import { sendMail } from "../lib/mailer.js";
@@ -30,7 +32,150 @@ function badgeExistsSql(candidateCount: number) {
   `;
 }
 
+function envPath() {
+    return path.resolve(process.cwd(), ".env");
+}
+
+function readEnvFile() {
+    try {
+        return fs.readFileSync(envPath(), "utf8");
+    } catch (error: any) {
+        if (error?.code === "ENOENT") return "";
+        throw error;
+    }
+}
+
+function parseEnvValue(key: string): string {
+    const content = readEnvFile();
+    for (const line of content.split(/\r?\n/)) {
+        const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+        if (!match || match[1] !== key) continue;
+        let value = match[2] ?? "";
+        if (
+            (value.startsWith('"') && value.endsWith('"')) ||
+            (value.startsWith("'") && value.endsWith("'"))
+        ) {
+            value = value.slice(1, -1);
+        }
+        return value;
+    }
+    return "";
+}
+
+function isGuestModeEnabled(): boolean {
+    return (
+        (
+            parseEnvValue("GUEST_MODE_ENABLED") ||
+            process.env.GUEST_MODE_ENABLED ||
+            "false"
+        ).toLowerCase() === "true"
+    );
+}
+
+function guestDefaultName(): string {
+    return (
+        parseEnvValue("GUEST_MODE_DEFAULT_NAME") ||
+        process.env.GUEST_MODE_DEFAULT_NAME ||
+        "Invité"
+    );
+}
+
 export async function kioskRoutes(app: FastifyInstance) {
+    app.get("/api/kiosk/guest-mode", async (_req, reply) => {
+        return reply.send({ enabled: isGuestModeEnabled() });
+    });
+
+    app.post("/api/kiosk/identify-guest", async (req, reply) => {
+        const body = z
+            .object({
+                name: z.string().trim().min(1),
+            })
+            .safeParse(req.body);
+
+        if (!body.success) {
+            return reply.code(400).send({ error: "Invalid payload" });
+        }
+
+        const guestName = body.data.name.trim();
+        const dbName = guestDefaultName();
+        const db = getDB();
+
+        // Find or create the guest user in DB
+        let dbUser = db
+            .prepare(
+                `SELECT
+           u.id,
+           u.name,
+           u.email,
+           u.rfid_uid,
+           u.is_active,
+           u.balance_cents,
+           u.topup_access
+         FROM users u
+         WHERE u.name = ?
+           AND u.deleted_at IS NULL
+         LIMIT 1`,
+            )
+            .get(dbName) as
+            | {
+                  id: number;
+                  name: string;
+                  email: string | null;
+                  rfid_uid: string | null;
+                  is_active: number;
+                  balance_cents: number;
+                  topup_access: number;
+              }
+            | undefined;
+
+        if (!dbUser) {
+            // Create the guest user
+            const result = db
+                .prepare(
+                    `INSERT OR IGNORE INTO users (name, email, is_active, balance_cents, topup_access, created_at)
+             VALUES (?, NULL, 1, 0, 1, datetime('now'))`,
+                )
+                .run(dbName);
+
+            dbUser = db
+                .prepare(
+                    `SELECT
+             u.id,
+             u.name,
+             u.email,
+             u.rfid_uid,
+             u.is_active,
+             u.balance_cents,
+             u.topup_access
+           FROM users u
+           WHERE u.name = ?
+             AND u.deleted_at IS NULL
+           LIMIT 1`,
+                )
+                .get(dbName) as typeof dbUser;
+        }
+
+        if (!dbUser) {
+            return reply
+                .code(500)
+                .send({ error: "Failed to create guest user" });
+        }
+
+        if (dbUser.is_active !== 1) {
+            return reply
+                .code(403)
+                .send({ error: "Guest user is disabled", user: dbUser });
+        }
+
+        // Return with the guest's entered name (not the DB name)
+        return reply.send({
+            user: {
+                ...dbUser,
+                name: guestName,
+            },
+        });
+    });
+
     app.post("/api/kiosk/identify", async (req, reply) => {
         const bodySchema = z.object({
             uid: z.string().min(1),
@@ -231,7 +376,12 @@ export async function kioskRoutes(app: FastifyInstance) {
                         `Email : ${body.data.email}`,
                         `Badge UID : ${normalizedUid}`,
                     ].join("\n"),
-                }).catch((e: any) => req.log.error({ error: e }, "badge notification email failed"));
+                }).catch((e: any) =>
+                    req.log.error(
+                        { error: e },
+                        "badge notification email failed",
+                    ),
+                );
             }
 
             return reply.send({ ok: true, request_id: id });
