@@ -473,6 +473,28 @@ export async function qrCodeRoutes(app: FastifyInstance) {
         }
     });
 
+        // Marquer un QR code de top-up comme "confirmé par l'utilisateur"
+    app.post("/api/kiosk/topup-qr/:unique_id/confirm-by-user", async (req, reply) => {
+        const params = z
+            .object({ unique_id: z.string().trim().min(6).max(32) })
+            .safeParse(req.params);
+        if (!params.success)
+            return reply.code(400).send({ error: "Invalid params" });
+
+        const db = getDB();
+        const exists = db
+            .prepare(`SELECT id FROM topup_qr_requests WHERE unique_id = ?`)
+            .get(params.data.unique_id);
+        if (!exists)
+            return reply.code(404).send({ error: "Top-up introuvable" });
+
+        db.prepare(
+            `UPDATE topup_qr_requests SET confirmed_by_user = 1 WHERE unique_id = ?`,
+        ).run(params.data.unique_id);
+
+        return reply.send({ ok: true });
+    });
+
     app.get("/api/admin/qr-code", async (req, reply) => {
         try {
             requireAdmin(req);
@@ -485,6 +507,7 @@ export async function qrCodeRoutes(app: FastifyInstance) {
                 status: z.enum(["verified", "unverified"]).optional(),
                 name: z.string().trim().optional(),
                 type: z.enum(["payment", "topup"]).optional(),
+                confirmed: z.enum(["0", "1"]).optional(),
             })
             .safeParse(req.query ?? {});
 
@@ -499,6 +522,7 @@ export async function qrCodeRoutes(app: FastifyInstance) {
         COALESCE(u.name, '(utilisateur supprime)') AS user_name,
         u.email AS user_email,
         q.amount_cents, q.created_at, q.status, q.verified_at,
+        q.confirmed_by_user,
         'payment' AS qr_type
       FROM qr_code_payments q
       LEFT JOIN users u ON u.id = q.user_id
@@ -510,6 +534,7 @@ export async function qrCodeRoutes(app: FastifyInstance) {
         COALESCE(u.name, '(utilisateur supprime)') AS user_name,
         u.email AS user_email,
         q.amount_cents, q.requested_at AS created_at, q.status, q.verified_at,
+        q.confirmed_by_user,
         'topup' AS qr_type
       FROM topup_qr_requests q
       LEFT JOIN users u ON u.id = q.user_id
@@ -525,6 +550,10 @@ export async function qrCodeRoutes(app: FastifyInstance) {
         if (query.data.name) {
             where.push("LOWER(COALESCE(user_name, '')) LIKE ?");
             params.push(`%${query.data.name.toLowerCase()}%`);
+        }
+        if (query.data.confirmed) {
+            where.push("confirmed_by_user = ?");
+            params.push(query.data.confirmed);
         }
 
         const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
@@ -559,6 +588,7 @@ export async function qrCodeRoutes(app: FastifyInstance) {
             status: "verified" | "unverified";
             verified_at: string | null;
             qr_type: "payment" | "topup";
+            confirmed_by_user: number;
         }>;
 
         return reply.send({ rows });

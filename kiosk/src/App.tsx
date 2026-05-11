@@ -1659,16 +1659,24 @@ export default function App() {
                                     </button>
                                     <button
                                         className="payment-modal-button"
-                                        onClick={() => {
+                                        onClick={async () => {
                                             setTopupModalOpen(false);
+                                            if (topupQrData?.unique_id) {
+                                                try {
+                                                    await fetch(
+                                                        `/api/kiosk/topup-qr/${topupQrData.unique_id}/confirm-by-user`,
+                                                        { method: "POST" },
+                                                    );
+                                                } catch {}
+                                            }
                                             setTopupQrData(null);
                                             setTopupError("");
                                             setStatus(
-                                                "Demande de top-up enregistrée. Vérification en attente par le comité.",
+                                                "Demande de top-up enregistree. Verification en attente par le comite.",
                                             );
                                         }}
                                     >
-                                        J'ai effectué le virement
+                                        J'ai effectue le virement
                                     </button>
                                 </div>
                             </>

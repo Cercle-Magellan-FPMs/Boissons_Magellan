@@ -12,6 +12,7 @@ type QrRow = {
     status: "verified" | "unverified";
     verified_at: string | null;
     qr_type: "payment" | "topup";
+    confirmed_by_user: number;
 };
 
 type QrSettings = {
@@ -36,6 +37,7 @@ export default function QrCodePage() {
     const [typeFilter, setTypeFilter] = useState<"" | "payment" | "topup">(
         "",
     );
+    const [confirmedFilter, setConfirmedFilter] = useState<string>("1");
 
     const [settings, setSettings] = useState<QrSettings>({
         recipient_name: "",
@@ -54,6 +56,7 @@ export default function QrCodePage() {
             if (statusFilter) qs.set("status", statusFilter);
             if (nameFilter.trim()) qs.set("name", nameFilter.trim());
             if (typeFilter) qs.set("type", typeFilter);
+            if (confirmedFilter) qs.set("confirmed", confirmedFilter);
             const data = await api<{ rows: QrRow[] }>(
                 `/api/admin/qr-code?${qs.toString()}`,
             );
@@ -76,7 +79,7 @@ export default function QrCodePage() {
 
     useEffect(() => {
         loadRows();
-    }, [statusFilter, nameFilter, typeFilter]);
+    }, [statusFilter, nameFilter, typeFilter, confirmedFilter]);
 
     useEffect(() => {
         loadSettings();
@@ -269,6 +272,20 @@ export default function QrCodePage() {
                 </label>
 
                 <label>
+                    Confirmé user :{" "}
+                    <select
+                        value={confirmedFilter}
+                        onChange={(e) =>
+                            setConfirmedFilter(e.target.value)
+                        }
+                    >
+                        <option value="1">Marqué payé</option>
+                        <option value="0">Pas marqué payé</option>
+                        <option value="">Tous</option>
+                    </select>
+                </label>
+
+                <label>
                     Type :{" "}
                     <select
                         value={typeFilter}
@@ -317,7 +334,7 @@ export default function QrCodePage() {
                             borderRadius: 10,
                             padding: 10,
                             display: "grid",
-                            gridTemplateColumns: "1.2fr 1.2fr 0.8fr 0.8fr auto",
+                            gridTemplateColumns: "1.1fr 1fr 0.7fr 0.7fr 0.7fr auto",
                             gap: 8,
                             alignItems: "center",
                         }}
@@ -363,6 +380,17 @@ export default function QrCodePage() {
                                     ? "Top-up"
                                     : "Commande"}
                             </span>
+                        </div>
+                        <div style={{ textAlign: "center" }}>
+                            {row.confirmed_by_user === 1 ? (
+                                <span style={{ color: "#8c8", fontWeight: 700, fontSize: "0.9em" }}>
+                                    ✅ Payé
+                                </span>
+                            ) : (
+                                <span style={{ color: "#c88", fontSize: "0.85em" }}>
+                                    Non confirmé
+                                </span>
+                            )}
                         </div>
                         <div
                             style={{
