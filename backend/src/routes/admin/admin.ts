@@ -901,4 +901,49 @@ export async function adminRoutes(app: FastifyInstance) {
 
         return { moves: rows };
     });
+
+    // --- UNDO STOCK MOVE (annuler une vente) ---
+    app.post("/api/admin/stock-moves/:id/undo", async (req, reply) => {
+        try {
+            requireAdmin(req);
+        } catch (e: any) {
+            return reply.code(e.statusCode ?? 500).send({ error: e.message });
+        }
+
+        const params = z.object({ id: z.coerce.number().int().positive() }).safeParse(req.params);
+        if (!params.success) return reply.code(400).send({ error: "Invalid id" });
+
+        const db = getDB();
+        const move = db.prepare(`
+            SELECT sm.id, sm.product_id, sm.delta_qty, sm.reason, sm.ref_id, sm.move_id,
+                   p.name AS product_name
+            FROM stock_moves sm
+            JOIN products p ON p.id = sm.product_id
+            WHERE sm.id = ? AND sm.reason = 'sale'
+        `).get(params.data.id) as any;
+
+        if (!move) return reply.code(404).send({ error: "Vente introuvable ou déjà annulée" });
+
+        const undoMoveId = randomUUID();
+        const tx = db.transaction(() => {
+            // Annuler la variation de stock
+            db.prepare(`UPDATE stock_current SET qty = qty - ? WHERE product_id = ?`)
+                .run(move.delta_qty, move.product_id);
+
+            // Enregistrer la correction
+            db.prepare(`
+                INSERT INTO stock_moves (move_id, product_id, delta_qty, reason, ref_id, comment)
+                VALUES (?, ?, ?, 'correction', ?, ?)
+            `).run(undoMoveId, move.product_id, -move.delta_qty, move.ref_id,
+                `Annulation vente #${move.id} (${move.product_name})`);
+
+            // Annuler la commande si elle existe
+            if (move.ref_id) {
+                db.prepare(`UPDATE orders SET status = 'cancelled' WHERE id = ?`).run(move.ref_id);
+            }
+        });
+
+        tx();
+        return reply.send({ ok: true, undo_move_id: undoMoveId });
+    });
 }

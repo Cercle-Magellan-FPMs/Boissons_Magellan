@@ -49,6 +49,18 @@ export default function RestockPage() {
         setProducts(data.products);
     }
 
+    async function undoMove(move: StockMove) {
+        if (!confirm(`Annuler la vente de ${move.product_name} (${move.delta_qty} unites) ?`)) return;
+        if (!confirm("Confirmer l'annulation ? Cette action est irreversible.")) return;
+        try {
+            await api(`/api/admin/stock-moves/${move.id}/undo`, { method: "POST" });
+            await loadMoves();
+            await loadProducts();
+        } catch (e: any) {
+            alert(e.message);
+        }
+    }
+
     async function loadMoves(reason?: string) {
         setMovesError("");
         try {
@@ -617,6 +629,24 @@ export default function RestockPage() {
                                                 {isReset
                                                     ? "⚠️ RESET COMPLET"
                                                     : (m.comment ?? "—")}
+                                            </td>
+                                            <td style={tdStyle}>
+                                                {m.reason === "sale" && (
+                                                    <button
+                                                        onClick={() => undoMove(m)}
+                                                        style={{
+                                                            padding: "2px 8px",
+                                                            fontSize: "0.8em",
+                                                            background: "#a33",
+                                                            color: "#fff",
+                                                            border: "none",
+                                                            borderRadius: 4,
+                                                            cursor: "pointer",
+                                                        }}
+                                                    >
+                                                        ↩ Annuler
+                                                    </button>
+                                                )}
                                             </td>
                                         </tr>
                                     );
