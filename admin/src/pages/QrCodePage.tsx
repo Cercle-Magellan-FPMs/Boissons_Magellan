@@ -379,12 +379,9 @@ export default function QrCodePage() {
                                     fontWeight: 700,
                                     background:
                                         row.qr_type === "topup"
-                                            ? "#2a4a5a"
-                                            : "#3a4a2a",
-                                    color:
-                                        row.qr_type === "topup"
-                                            ? "#8cf"
-                                            : "#8f8",
+                                            ? "#51dfb1"
+                                            : "#42e1dc",
+                                    color: "#1a2a34",
                                 }}
                             >
                                 {row.qr_type === "topup"
