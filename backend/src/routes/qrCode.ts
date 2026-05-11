@@ -390,8 +390,8 @@ export async function qrCodeRoutes(app: FastifyInstance) {
 
                 db.prepare(
                     `
-          INSERT INTO qr_code_payments (unique_id, user_id, amount_cents, status)
-          VALUES (?, ?, ?, 'unverified')
+          INSERT INTO qr_code_payments (unique_id, user_id, amount_cents, status, confirmed_by_user)
+          VALUES (?, ?, ?, 'unverified', 1)
         `,
                 ).run(uniqueId, body.data.user_id, body.data.amount_cents);
 
