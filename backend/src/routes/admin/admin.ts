@@ -868,8 +868,13 @@ export async function adminRoutes(app: FastifyInstance) {
             ? reasonFilter
             : null;
 
-        const whereClause = reason ? `AND sm.reason = ?` : "";
-        const params = reason ? [reason] : [];
+        // Par défaut, masquer les ventes annulées (sauf si filtre raison actif)
+        const hideCancelled = !reason;
+        const whereClause = [
+            reason ? `AND sm.reason = ?` : "",
+            hideCancelled ? `AND ((sm.reason NOT IN ('sale','correction')) OR o.status IS NULL OR o.status != 'cancelled')` : "",
+        ].filter(Boolean).join(" ");
+        const params: Array<string> = reason ? [reason] : [];
 
         const rows = db
             .prepare(
