@@ -872,7 +872,7 @@ export async function adminRoutes(app: FastifyInstance) {
         const hideCancelled = !reason;
         const whereClause = [
             reason ? `AND sm.reason = ?` : "",
-            hideCancelled ? `AND ((sm.reason NOT IN ('sale','correction')) OR o.status IS NULL OR o.status != 'cancelled')` : "",
+            hideCancelled ? `AND (o.status IS NULL OR o.status != 'cancelled')` : "",
         ].filter(Boolean).join(" ");
         const params: Array<string> = reason ? [reason] : [];
 
@@ -884,7 +884,7 @@ export async function adminRoutes(app: FastifyInstance) {
              u.name AS user_name
       FROM stock_moves sm
       JOIN products p ON p.id = sm.product_id
-      LEFT JOIN orders o ON sm.reason = 'sale' AND sm.ref_id = o.id
+      LEFT JOIN orders o ON sm.ref_id = o.id AND sm.reason IN ('sale', 'correction')
       LEFT JOIN users u ON u.id = o.user_id
       WHERE p.deleted_at IS NULL
         ${whereClause}
