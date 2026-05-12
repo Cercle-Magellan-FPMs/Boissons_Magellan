@@ -144,7 +144,7 @@ export default function QrCodePage() {
         try {
             await api<{ ok: true }>(`/api/admin/qr-code/${row.id}`, {
                 method: "PATCH",
-                body: JSON.stringify({ status: nextStatus }),
+                body: JSON.stringify({ status: nextStatus, type: row.qr_type }),
             });
             await loadRows();
         } catch (e: any) {
