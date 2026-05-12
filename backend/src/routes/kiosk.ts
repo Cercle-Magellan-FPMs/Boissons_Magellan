@@ -186,9 +186,9 @@ export async function kioskRoutes(app: FastifyInstance) {
         if (!body.success) return reply.code(400).send({ error: "Invalid payload" });
 
         const db = getDB();
-        const defaultName = process.env.GUEST_MODE_DEFAULT_NAME || "Invite";
-        db.prepare("UPDATE users SET name = ? WHERE id = ? AND name LIKE '[GUEST] %'")
-            .run(defaultName, body.data.user_id);
+        // Soft-delete: garde le nom pour les QR codes mais masque de la liste admin
+        db.prepare("UPDATE users SET deleted_at = datetime('now'), is_active = 0 WHERE id = ? AND name LIKE '[GUEST] %'")
+            .run(body.data.user_id);
         return reply.send({ ok: true });
     });
 
