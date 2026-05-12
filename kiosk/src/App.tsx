@@ -583,6 +583,50 @@ export default function App() {
         0,
     );
 
+    async function submitVirement() {
+        if (!user || totalCents <= 0) return;
+        setStatus("Envoi de la commande par virement...");
+        try {
+            const cartItems = Object.entries(cart)
+                .filter(([, qty]) => qty > 0)
+                .map(([productId, qty]) => ({
+                    product_id: Number(productId),
+                    qty,
+                }));
+            const res = await fetch("/api/kiosk/order-virement", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ user_id: user.id, items: cartItems }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                setStatus(err.error || "Erreur");
+                return;
+            }
+            setPaymentErrorModal(null);
+            setScreen("thanks");
+            setStatus("Commande enregistree. Pensez a faire le virement !");
+            setTimeout(() => {
+                const guestId = user?.id;
+                setUser(null);
+                setProducts([]);
+                setCart({});
+                setCheckoutMessage("");
+                setScreen("badge");
+                setStatus("Pas de badge ? Contactez le comite.");
+                if (guestId) {
+                    fetch("/api/kiosk/reset-guest", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ user_id: guestId }),
+                    }).catch(() => {});
+                }
+            }, 4000);
+        } catch {
+            setStatus("Erreur reseau");
+        }
+    }
+
     async function prepareQrPayment() {
         if (!user || totalCents <= 0) return;
 
@@ -1457,6 +1501,13 @@ export default function App() {
                                 {qrLoading
                                     ? "Génération..."
                                     : "Payer par QR Code"}
+                            </button>
+                            <button
+                                className="payment-modal-button"
+                                onClick={submitVirement}
+                                disabled={!user || totalCents <= 0}
+                            >
+                                J'ai payé par virement
                             </button>
                             <button
                                 className="payment-modal-button"
