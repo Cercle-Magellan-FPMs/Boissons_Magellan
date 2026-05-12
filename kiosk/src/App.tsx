@@ -726,6 +726,7 @@ export default function App() {
             setProducts([]);
             setCart({});
             setCheckoutMessage("");
+            
             setPaymentErrorModal(null);
             setQrModalOpen(false);
             setQrPaymentData(null);
@@ -926,6 +927,7 @@ export default function App() {
                                         setUser(null);
                                         setCart({});
                                         setCheckoutMessage("");
+                                        
                                         setPaymentErrorModal(null);
                                         setQrModalOpen(false);
                                         setQrPaymentData(null);

@@ -180,7 +180,19 @@ export async function kioskRoutes(app: FastifyInstance) {
         });
     });
 
-    app.post("/api/kiosk/identify", async (req, reply) => {
+    
+    app.post("/api/kiosk/reset-guest", async (req, reply) => {
+        const body = z.object({ user_id: z.number().int().positive() }).safeParse(req.body);
+        if (!body.success) return reply.code(400).send({ error: "Invalid payload" });
+
+        const db = getDB();
+        const defaultName = process.env.GUEST_MODE_DEFAULT_NAME || "Invite";
+        db.prepare("UPDATE users SET name = ? WHERE id = ? AND name LIKE '[GUEST] %'")
+            .run(defaultName, body.data.user_id);
+        return reply.send({ ok: true });
+    });
+
+app.post("/api/kiosk/identify", async (req, reply) => {
         const bodySchema = z.object({
             uid: z.string().min(1),
         });
