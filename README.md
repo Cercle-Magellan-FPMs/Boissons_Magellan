@@ -631,13 +631,17 @@ From the repo root (`/opt/boissons/Boissons_Magellan`):
 # 1. Build backend TypeScript
 cd backend && npm run build && cd ..
 
-# 2. Build frontend admin
+# 2. Build frontend admin + kiosk
 cd admin && npm run build && cd ..
+cd kiosk && npm run build && cd ..
 
-# 3. Deploy admin dist to nginx
+# 3. Deploy to nginx
 sudo rm -rf /var/www/boissons/admin/assets /var/www/boissons/admin/index.html
 sudo cp -r admin/dist/* /var/www/boissons/admin/
 sudo chown -R www-data:www-data /var/www/boissons/admin/
+sudo rm -rf /var/www/boissons/kiosk/*
+sudo cp -r kiosk/dist/* /var/www/boissons/kiosk/
+sudo chown -R www-data:www-data /var/www/boissons/kiosk/
 
 # 4. Restart backend service
 sudo systemctl restart boissons-backend.service
@@ -658,6 +662,47 @@ sudo nginx -t && sudo systemctl reload nginx
 - Usage:
   - default DB: `ops/reset/reset-boissons-data.sh`
   - explicit DB path: `ops/reset/reset-boissons-data.sh /var/lib/boissons/app.db`
+
+### QR Code payments & top-ups
+
+- Kiosk : paiement par QR code quand le solde est insuffisant + top-up standalone
+- Admin `/admin/qrcode` : vue unifiée des QR codes (paiements + top-ups) avec filtres :
+  - Status (vérifié/pas vérifié), Type (paiement/top-up), Confirmé user (payé/non payé), Nom
+  - Badge coloré : `Commande` (cyan) / `Top-up` (vert d'eau)
+  - Colonne `✅ Payé` / `Non confirmé` (confirmed_by_user)
+  - Double confirmation avant de marquer vérifié
+  - Bouton 🗑️ pour supprimer une entrée
+- Top-up vérifié → crédite le solde + log dans `/admin/topups`
+- Top-up dé-vérifié → débite le solde + log d'ajustement
+- Notifications email configurables (`/admin/email`) :
+  - Emails notifiés quand un user marque son paiement comme effectué
+  - Seuil minimum configurable (défaut 5€)
+  - Emails notifiés pour les nouvelles demandes de badge
+
+### Guest mode (mode invité)
+
+- Activation sur `/admin/users` : switch + nom par défaut
+- Kiosk : bouton `👤 Invité` sur l'écran badge (même couleur que "Demander un badge")
+- Modal avec clavier virtuel pour entrer le prénom
+- L'invité a solde=0, topup_access=0 → doit payer par QR
+- Nom stocké en `[GUEST] Prénom` pour les logs QR
+- Soft-delete après déconnexion/commande (invisible dans `/admin/users`)
+
+### Stock management
+
+- Page `/admin/restock` : historique avec filtres par raison (🛒 Ventes, 📥 Restocks, 🔧 Corrections)
+- Colonne User (qui a acheté / "admin" pour les restocks)
+- Bouton ↩ Annuler sur les ventes (double confirmation, revert stock, annule commande)
+- Ventes annulées + corrections masquées par défaut
+- Timestamps en heure de Bruxelles (Europe/Brussels)
+
+### User management
+
+- Page `/admin/users` : vue compacte/étendue par utilisateur
+- Indicateurs : ❌ inactif, 🔑 accès local, 💰 top-up autorisé
+- Top-up access : toggle par user (défaut bloqué, message personnalisable)
+- Section "Accès au local" masquée par défaut (dropdown)
+
 
 ## Notes
 
