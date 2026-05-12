@@ -27,6 +27,16 @@ export default function TopupsLogPage() {
   const [toDate, setToDate] = useState(today);
   const [methodFilter, setMethodFilter] = useState<"" | "bank_transfer" | "cash">("");
 
+  async function deleteRow(row: TopupRow) {
+    if (!confirm(`Supprimer ce log de ${row.user_name} (${euros(Number(row.delta_cents ?? 0))}) ?`)) return;
+    try {
+      await api(`/api/admin/topups/${row.id}`, { method: "DELETE" });
+      await load();
+    } catch (e: any) {
+      alert(e.message);
+    }
+  }
+
   async function load() {
     setError("");
     try {
@@ -105,7 +115,7 @@ export default function TopupsLogPage() {
               borderRadius: 10,
               padding: 10,
               display: "grid",
-              gridTemplateColumns: "2fr 1.3fr 1fr 2fr",
+              gridTemplateColumns: "2fr 1.3fr 1fr 2fr auto",
               gap: 8,
               alignItems: "center",
             }}
@@ -122,6 +132,20 @@ export default function TopupsLogPage() {
             </div>
             <div style={{ fontWeight: 900 }}>{euros(Number(row.delta_cents ?? 0))}</div>
             <div style={{ opacity: 0.9 }}>{row.comment}</div>
+            <button
+              onClick={() => deleteRow(row)}
+              style={{
+                background: "#a33",
+                color: "#fff",
+                border: "none",
+                borderRadius: 4,
+                padding: "2px 8px",
+                cursor: "pointer",
+                fontSize: "0.85em",
+              }}
+            >
+              🗑️
+            </button>
           </div>
         ))}
         {rows.length === 0 && <p style={{ opacity: 0.7 }}>Aucun top-up trouvé.</p>}

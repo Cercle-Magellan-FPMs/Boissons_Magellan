@@ -899,8 +899,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
             return reply.code(400).send({ error: "Invalid query" });
 
         const where: string[] = [
-            "at.reason = 'topup'",
-            "at.delta_cents > 0",
+            "(at.reason = 'topup' OR (at.reason = 'adjustment' AND at.comment LIKE '%QR topup%'))",
             "u.deleted_at IS NULL",
         ];
         const args: Array<string> = [];
@@ -962,6 +961,32 @@ export async function adminUserRoutes(app: FastifyInstance) {
             })),
         });
     });
+
+    app.delete("/api/admin/topups/:id", async (req, reply) => {
+        try { requireAdmin(req); } catch (e: any) {
+            return reply.code(e.statusCode || 500).send({ error: e.message });
+        }
+        const params = z.object({ id: z.string().min(1) }).safeParse(req.params);
+        if (!params.success) return reply.code(400).send({ error: "Invalid id" });
+        const db = getDB();
+        const exists = db.prepare("SELECT id FROM account_transactions WHERE id = ?").get(params.data.id);
+        if (!exists) return reply.code(404).send({ error: "Transaction introuvable" });
+        db.prepare("DELETE FROM account_transactions WHERE id = ?").run(params.data.id);
+        return reply.send({ ok: true });
+    });
+    app.delete("/api/admin/topups/:id", async (req, reply) => {
+        try { requireAdmin(req); } catch (e: any) {
+            return reply.code(e.statusCode || 500).send({ error: e.message });
+        }
+        const params = z.object({ id: z.string().min(1) }).safeParse(req.params);
+        if (!params.success) return reply.code(400).send({ error: "Invalid id" });
+        const db = getDB();
+        const exists = db.prepare("SELECT id FROM account_transactions WHERE id = ?").get(params.data.id);
+        if (!exists) return reply.code(404).send({ error: "Transaction introuvable" });
+        db.prepare("DELETE FROM account_transactions WHERE id = ?").run(params.data.id);
+        return reply.send({ ok: true });
+    });
+
 
     app.get("/api/admin/badge-requests", async (req, reply) => {
         try {
