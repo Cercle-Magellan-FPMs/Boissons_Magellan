@@ -176,7 +176,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
         ), '') AS badge_uids
       FROM users u
       WHERE u.deleted_at IS NULL
-        AND u.name != ?
+        AND u.name NOT LIKE '[GUEST] %' AND u.name != ?
       ORDER BY name ASC
     `,
             )

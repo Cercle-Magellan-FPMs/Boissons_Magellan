@@ -186,7 +186,7 @@ export async function kioskRoutes(app: FastifyInstance) {
         if (!body.success) return reply.code(400).send({ error: "Invalid payload" });
 
         const db = getDB();
-        // Soft-delete: garde le nom pour les QR codes mais masque de la liste admin
+        // Soft-delete: masqué de /admin/users mais le nom reste pour les QR codes
         db.prepare("UPDATE users SET deleted_at = datetime('now'), is_active = 0 WHERE id = ? AND name LIKE '[GUEST] %'")
             .run(body.data.user_id);
         return reply.send({ ok: true });
