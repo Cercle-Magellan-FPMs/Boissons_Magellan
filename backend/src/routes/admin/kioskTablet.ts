@@ -1,6 +1,12 @@
 import { Buffer } from "node:buffer";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import {
+    MAX_IDLE_TIMEOUT_SECONDS,
+    MIN_IDLE_TIMEOUT_SECONDS,
+    loadKioskSessionSettings,
+    saveKioskSessionSettings,
+} from "../../lib/kioskSessionSettings.js";
 import { requireAdmin } from "./_auth.js";
 
 const endpointValues = [
@@ -97,6 +103,44 @@ function errorMessage(error: unknown) {
 }
 
 export async function adminKioskTabletRoutes(app: FastifyInstance) {
+    app.get("/api/admin/kiosk-tablet/session-settings", async (req, reply) => {
+        try {
+            requireAdmin(req);
+        } catch (e: any) {
+            return reply.code(e.statusCode || 500).send({ error: e.message });
+        }
+
+        return reply.send(loadKioskSessionSettings());
+    });
+
+    app.put("/api/admin/kiosk-tablet/session-settings", async (req, reply) => {
+        try {
+            requireAdmin(req);
+        } catch (e: any) {
+            return reply.code(e.statusCode || 500).send({ error: e.message });
+        }
+
+        const parsed = z
+            .object({
+                idle_timeout_seconds: z
+                    .number()
+                    .int()
+                    .min(MIN_IDLE_TIMEOUT_SECONDS)
+                    .max(MAX_IDLE_TIMEOUT_SECONDS),
+            })
+            .safeParse(req.body);
+
+        if (!parsed.success)
+            return reply.code(400).send({ error: "Invalid payload" });
+
+        return reply.send({
+            ok: true,
+            settings: saveKioskSessionSettings(
+                parsed.data.idle_timeout_seconds,
+            ),
+        });
+    });
+
     app.post("/api/admin/kiosk-tablet/proxy", async (req, reply) => {
         try {
             requireAdmin(req);

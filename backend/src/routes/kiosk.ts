@@ -5,6 +5,7 @@ import fs from "fs";
 import path from "path";
 import { getDB } from "../db/db.js";
 import { badgeMatchCandidates, normalizeBadgeUid } from "../lib/badgeUid.js";
+import { loadKioskSessionSettings } from "../lib/kioskSessionSettings.js";
 import { sendMail } from "../lib/mailer.js";
 
 function eurosFromCents(cents: number) {
@@ -81,6 +82,10 @@ function guestDefaultName(): string {
 }
 
 export async function kioskRoutes(app: FastifyInstance) {
+    app.get("/api/kiosk/session-settings", async (_req, reply) => {
+        return reply.send(loadKioskSessionSettings());
+    });
+
     app.get("/api/kiosk/guest-mode", async (_req, reply) => {
         return reply.send({ enabled: isGuestModeEnabled() });
     });

@@ -95,6 +95,11 @@ Declared QR payments (verification happens later).
 - `amount_cents`, `created_at`
 - `status` (`verified`, `unverified`), `verified_at`
 
+### kiosk_session_settings
+Single-row table (`id = 1`) for kiosk app session behavior.
+- `idle_timeout_seconds` inactivity duration before warning
+- `updated_at`
+
 ## Legacy Tables Still Present
 - `admins`
 - `monthly_debts`

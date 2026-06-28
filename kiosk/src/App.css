@@ -99,7 +99,9 @@
 
 .kiosk-grid {
   display: grid;
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  grid-template-areas: "products cart";
+  align-items: start;
   gap: 18px;
 }
 
@@ -110,6 +112,10 @@
   border: 1px solid var(--border);
   background: var(--panel);
   box-shadow: var(--shadow);
+}
+
+.products-card {
+  grid-area: products;
 }
 
 .section-title {
@@ -198,8 +204,11 @@
 }
 
 .cart-card {
+  grid-area: cart;
   display: grid;
   gap: 12px;
+  position: sticky;
+  top: 16px;
 }
 
 .empty-state {
@@ -250,6 +259,16 @@
   font-weight: 700;
   font-size: 1.05rem;
   margin-top: 8px;
+}
+
+.cart-validation {
+  display: grid;
+  gap: 12px;
+  margin-top: auto;
+}
+
+.cart-validation .primary-button {
+  width: 100%;
 }
 
 .primary-button {
@@ -397,6 +416,9 @@
 @media (max-width: 900px) {
   .kiosk-grid {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "cart"
+      "products";
   }
 
   .debt-grid {
@@ -526,6 +548,52 @@
   border: 1px solid rgba(255, 205, 150, 0.95);
   color: #2b1505;
   font-weight: 800;
+}
+
+.session-timeout-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 10, 12, 0.9);
+  display: grid;
+  place-items: center;
+  z-index: 90;
+  padding: 16px;
+}
+
+.session-timeout-modal {
+  width: min(560px, 92vw);
+  border-radius: 24px;
+  padding: 30px;
+  background: linear-gradient(160deg, rgba(13, 62, 69, 0.98), rgba(6, 21, 24, 0.98));
+  border: 1px solid rgba(68, 226, 210, 0.75);
+  box-shadow: 0 30px 80px rgba(1, 26, 30, 0.8);
+  text-align: center;
+  animation: float-in 220ms ease-out;
+}
+
+.session-timeout-modal h2 {
+  margin: 0 0 10px;
+  font-size: clamp(1.5rem, 3.4vw, 2.2rem);
+}
+
+.session-timeout-modal p {
+  margin: 0;
+  color: #efffff;
+  font-size: 1.15rem;
+  line-height: 1.45;
+}
+
+.session-timeout-modal strong {
+  color: var(--accent-2);
+  font-size: 1.25em;
+}
+
+.session-timeout-actions {
+  margin-top: 22px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .qr-payment-modal {

@@ -8,6 +8,8 @@ Admin endpoints require `x-admin-token`.
 
 ## Kiosk
 ### Auth / user
+- `GET /api/kiosk/session-settings`
+  - returns: `{ idle_timeout_seconds }`
 - `POST /api/kiosk/identify`
   - body: `{ uid }`
 - `POST /api/kiosk/badge-request`
@@ -86,6 +88,13 @@ Admin endpoints require `x-admin-token`.
 - `PATCH /api/admin/qr-code/:id`
 - `GET /api/admin/qr-code/settings`
 - `PUT /api/admin/qr-code/settings`
+
+### Kiosk tablet
+- `GET /api/admin/kiosk-tablet/session-settings`
+- `PUT /api/admin/kiosk-tablet/session-settings`
+  - body: `{ idle_timeout_seconds }`
+- `POST /api/admin/kiosk-tablet/proxy`
+  - proxies approved FreeKiosk API endpoints
 
 ## Error Semantics (common)
 - `400`: invalid payload/query

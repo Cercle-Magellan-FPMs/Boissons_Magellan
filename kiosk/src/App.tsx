@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 
 type User = {
@@ -32,9 +32,15 @@ type QrPaymentData = {
     intent_token: string;
     expires_at: string;
 };
+type KioskSessionSettings = {
+    idle_timeout_seconds: number;
+};
 
 const insufficientBalanceMessage =
     "Solde insuffisant, merci de faire un virement au compte suivant : BE70 7512 1182 7125";
+const defaultBadgeStatus = "Pas de badge ? Contactez le comité.";
+const DEFAULT_IDLE_TIMEOUT_SECONDS = 60;
+const SESSION_WARNING_GRACE_SECONDS = 15;
 
 const badgeCharMap: Record<string, string> = {
     à: "0",
@@ -85,7 +91,14 @@ export default function App() {
     const [screen, setScreen] = useState<"badge" | "products" | "thanks">(
         "badge",
     );
-    const [status, setStatus] = useState("Pas de badge ? Contactez le comité.");
+    const [status, setStatus] = useState(defaultBadgeStatus);
+    const [sessionSettings, setSessionSettings] =
+        useState<KioskSessionSettings>({
+            idle_timeout_seconds: DEFAULT_IDLE_TIMEOUT_SECONDS,
+        });
+    const [sessionWarningOpen, setSessionWarningOpen] = useState(false);
+    const [sessionWarningRemainingSeconds, setSessionWarningRemainingSeconds] =
+        useState(SESSION_WARNING_GRACE_SECONDS);
     const [user, setUser] = useState<User | null>(null);
     const [blockedModal, setBlockedModal] = useState<{
         title: string;
@@ -180,6 +193,10 @@ export default function App() {
     const inputRef = useRef<HTMLInputElement | null>(null);
     const scanTimeoutRef = useRef<number | null>(null);
     const scanStartedAtRef = useRef<number | null>(null);
+    const idleTimeoutRef = useRef<number | null>(null);
+    const sessionWarningTimeoutRef = useRef<number | null>(null);
+    const sessionWarningIntervalRef = useRef<number | null>(null);
+    const activeUserId = user?.id ?? null;
 
     useEffect(() => {
         if (badgeRequestOpen || accountDetailDialog) return;
@@ -193,24 +210,193 @@ export default function App() {
         };
     }, [badgeRequestOpen, accountDetailDialog]);
 
-    function showBlockedModal(name?: string) {
-        const baseMessage =
-            "Votre compte est bloqué. Vous ne pouvez pas commander de boisson. Contactez le comité.";
-        setBlockedModal({
-            title: "Accès bloqué",
-            message: name ? `${name}, ${baseMessage}` : baseMessage,
-        });
+    useEffect(() => {
+        fetch("/api/kiosk/session-settings")
+            .then((r) => r.json())
+            .then((d) => {
+                const idleTimeoutSeconds = Number(d.idle_timeout_seconds);
+                if (Number.isFinite(idleTimeoutSeconds) && idleTimeoutSeconds > 0) {
+                    setSessionSettings({
+                        idle_timeout_seconds: idleTimeoutSeconds,
+                    });
+                }
+            })
+            .catch(() => {});
+    }, []);
+
+    const clearSessionTimers = useCallback(() => {
+        if (idleTimeoutRef.current) {
+            window.clearTimeout(idleTimeoutRef.current);
+            idleTimeoutRef.current = null;
+        }
+        if (sessionWarningTimeoutRef.current) {
+            window.clearTimeout(sessionWarningTimeoutRef.current);
+            sessionWarningTimeoutRef.current = null;
+        }
+        if (sessionWarningIntervalRef.current) {
+            window.clearInterval(sessionWarningIntervalRef.current);
+            sessionWarningIntervalRef.current = null;
+        }
+    }, []);
+
+    const resetActiveSession = useCallback((statusMessage = defaultBadgeStatus) => {
+        clearSessionTimers();
         setUser(null);
         setProducts([]);
         setCart({});
         setCheckoutMessage("");
+        setBlockedModal(null);
         setPaymentErrorModal(null);
         setQrModalOpen(false);
         setQrPaymentData(null);
+        setQrLoading(false);
         setQrError("");
+        setQrConfirmLoading(false);
+        setTopupModalOpen(false);
+        setTopupAmount("10");
+        setTopupLoading(false);
+        setTopupError("");
+        setTopupQrData(null);
         setAccountDetailDialog(null);
+        setAccountDetailError("");
+        setAccountDetailSubmitting(false);
+        setGuestModalOpen(false);
+        setGuestName("");
+        setSessionWarningOpen(false);
+        setSessionWarningRemainingSeconds(SESSION_WARNING_GRACE_SECONDS);
         setScreen("badge");
-        setStatus("Pas de badge ? Contactez le comité.");
+        setStatus(statusMessage);
+    }, [clearSessionTimers]);
+
+    const playSessionWarningAlert = useCallback(() => {
+        const AudioContextCtor =
+            window.AudioContext ||
+            (window as typeof window & {
+                webkitAudioContext?: typeof AudioContext;
+            }).webkitAudioContext;
+        if (!AudioContextCtor) return;
+
+        try {
+            const audioContext = new AudioContextCtor();
+            void audioContext.resume().catch(() => {});
+            const now = audioContext.currentTime;
+            const notes = [784, 988, 1175, 988];
+
+            notes.forEach((frequency, index) => {
+                const start = now + index * 0.16;
+                const oscillator = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+
+                oscillator.type = "sine";
+                oscillator.frequency.setValueAtTime(frequency, start);
+                gain.gain.setValueAtTime(0.0001, start);
+                gain.gain.exponentialRampToValueAtTime(0.18, start + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.14);
+
+                oscillator.connect(gain);
+                gain.connect(audioContext.destination);
+                oscillator.start(start);
+                oscillator.stop(start + 0.15);
+            });
+
+            window.setTimeout(() => {
+                void audioContext.close().catch(() => {});
+            }, 900);
+        } catch {
+            // Audio is a best-effort warning; browser autoplay rules can block it.
+        }
+    }, []);
+
+    useEffect(() => {
+        if (screen !== "products" || activeUserId == null || sessionWarningOpen) {
+            if (idleTimeoutRef.current) {
+                window.clearTimeout(idleTimeoutRef.current);
+                idleTimeoutRef.current = null;
+            }
+            return;
+        }
+
+        const timeoutMs =
+            Math.max(1, sessionSettings.idle_timeout_seconds) * 1000;
+
+        const restartIdleTimer = () => {
+            if (idleTimeoutRef.current) {
+                window.clearTimeout(idleTimeoutRef.current);
+            }
+            idleTimeoutRef.current = window.setTimeout(() => {
+                idleTimeoutRef.current = null;
+                setSessionWarningOpen(true);
+            }, timeoutMs);
+        };
+
+        restartIdleTimer();
+
+        window.addEventListener("pointerdown", restartIdleTimer);
+        window.addEventListener("keydown", restartIdleTimer);
+        window.addEventListener("touchstart", restartIdleTimer);
+
+        return () => {
+            if (idleTimeoutRef.current) {
+                window.clearTimeout(idleTimeoutRef.current);
+                idleTimeoutRef.current = null;
+            }
+            window.removeEventListener("pointerdown", restartIdleTimer);
+            window.removeEventListener("keydown", restartIdleTimer);
+            window.removeEventListener("touchstart", restartIdleTimer);
+        };
+    }, [
+        screen,
+        activeUserId,
+        sessionWarningOpen,
+        sessionSettings.idle_timeout_seconds,
+    ]);
+
+    useEffect(() => {
+        if (!sessionWarningOpen) {
+            if (sessionWarningTimeoutRef.current) {
+                window.clearTimeout(sessionWarningTimeoutRef.current);
+                sessionWarningTimeoutRef.current = null;
+            }
+            if (sessionWarningIntervalRef.current) {
+                window.clearInterval(sessionWarningIntervalRef.current);
+                sessionWarningIntervalRef.current = null;
+            }
+            return;
+        }
+
+        setSessionWarningRemainingSeconds(SESSION_WARNING_GRACE_SECONDS);
+        playSessionWarningAlert();
+
+        const deadline = Date.now() + SESSION_WARNING_GRACE_SECONDS * 1000;
+        sessionWarningIntervalRef.current = window.setInterval(() => {
+            setSessionWarningRemainingSeconds(
+                Math.max(0, Math.ceil((deadline - Date.now()) / 1000)),
+            );
+        }, 250);
+        sessionWarningTimeoutRef.current = window.setTimeout(() => {
+            resetActiveSession("Session expirée. Badgez pour recommencer.");
+        }, SESSION_WARNING_GRACE_SECONDS * 1000);
+
+        return () => {
+            if (sessionWarningTimeoutRef.current) {
+                window.clearTimeout(sessionWarningTimeoutRef.current);
+                sessionWarningTimeoutRef.current = null;
+            }
+            if (sessionWarningIntervalRef.current) {
+                window.clearInterval(sessionWarningIntervalRef.current);
+                sessionWarningIntervalRef.current = null;
+            }
+        };
+    }, [playSessionWarningAlert, resetActiveSession, sessionWarningOpen]);
+
+    function showBlockedModal(name?: string) {
+        const baseMessage =
+            "Votre compte est bloqué. Vous ne pouvez pas commander de boisson. Contactez le comité.";
+        resetActiveSession();
+        setBlockedModal({
+            title: "Accès bloqué",
+            message: name ? `${name}, ${baseMessage}` : baseMessage,
+        });
     }
 
     async function identify(uidRaw: string, scanDurationMs?: number) {
@@ -606,14 +792,9 @@ export default function App() {
             setPaymentErrorModal(null);
             setScreen("thanks");
             setStatus("Commande enregistree. Pensez a faire le virement !");
+            const guestId = user.id;
             setTimeout(() => {
-                const guestId = user?.id;
-                setUser(null);
-                setProducts([]);
-                setCart({});
-                setCheckoutMessage("");
-                setScreen("badge");
-                setStatus("Pas de badge ? Contactez le comite.");
+                resetActiveSession();
                 if (guestId) {
                     fetch("/api/kiosk/reset-guest", {
                         method: "POST",
@@ -699,12 +880,7 @@ export default function App() {
             );
 
             setTimeout(() => {
-                setCart({});
-                setUser(null);
-                setProducts([]);
-                setAccountDetailDialog(null);
-                setScreen("badge");
-                setStatus("Pas de badge ? Contactez le comité.");
+                resetActiveSession();
             }, 3000);
         } catch {
             setQrError("Impossible d'enregistrer la déclaration de paiement.");
@@ -766,18 +942,7 @@ export default function App() {
         );
 
         setTimeout(() => {
-            setUser(null);
-            setProducts([]);
-            setCart({});
-            setCheckoutMessage("");
-            
-            setPaymentErrorModal(null);
-            setQrModalOpen(false);
-            setQrPaymentData(null);
-            setQrError("");
-            setAccountDetailDialog(null);
-            setStatus("Pas de badge ? Contactez le comité.");
-            setScreen("badge");
+            resetActiveSession();
         }, 3000);
     }
 
@@ -966,21 +1131,7 @@ export default function App() {
                                 )}
                                 <button
                                     className="ghost-button"
-                                    onClick={() => {
-                                        setScreen("badge");
-                                        setUser(null);
-                                        setCart({});
-                                        setCheckoutMessage("");
-                                        
-                                        setPaymentErrorModal(null);
-                                        setQrModalOpen(false);
-                                        setQrPaymentData(null);
-                                        setQrError("");
-                                        setAccountDetailDialog(null);
-                                        setStatus(
-                                            "Pas de badge ? Contactez le comité.",
-                                        );
-                                    }}
+                                    onClick={() => resetActiveSession()}
                                 >
                                     Déconnexion
                                 </button>
@@ -1101,29 +1252,32 @@ export default function App() {
                                                 </div>
                                             </div>
                                         ))}
-
-                                        <div className="cart-total">
-                                            <span>Total</span>
-                                            <span>{euros(totalCents)}</span>
-                                        </div>
-
-                                        {checkoutMessage && (
-                                            <p
-                                                className="checkout-message"
-                                                role="alert"
-                                            >
-                                                {checkoutMessage}
-                                            </p>
-                                        )}
-
-                                        <button
-                                            className="primary-button"
-                                            onClick={submitOrder}
-                                        >
-                                            Valider la commande
-                                        </button>
                                     </div>
                                 )}
+
+                                <div className="cart-validation">
+                                    <div className="cart-total">
+                                        <span>Total</span>
+                                        <span>{euros(totalCents)}</span>
+                                    </div>
+
+                                    {checkoutMessage && (
+                                        <p
+                                            className="checkout-message"
+                                            role="alert"
+                                        >
+                                            {checkoutMessage}
+                                        </p>
+                                    )}
+
+                                    <button
+                                        className="primary-button"
+                                        onClick={submitOrder}
+                                        disabled={cartLines.length === 0}
+                                    >
+                                        Valider la commande
+                                    </button>
+                                </div>
                             </aside>
                         </div>
                     </section>
@@ -1140,6 +1294,49 @@ export default function App() {
                     </section>
                 )}
             </main>
+            {sessionWarningOpen && user && (
+                <div
+                    className="session-timeout-backdrop"
+                    role="dialog"
+                    aria-modal="true"
+                >
+                    <div className="session-timeout-modal">
+                        <h2>Session inactive</h2>
+                        <p>
+                            Votre session va se fermer dans{" "}
+                            <strong>
+                                {sessionWarningRemainingSeconds} s
+                            </strong>
+                            .
+                        </p>
+                        <div className="session-timeout-actions">
+                            <button
+                                type="button"
+                                className="ghost-button"
+                                onClick={() =>
+                                    resetActiveSession(
+                                        "Session fermée. Badgez pour recommencer.",
+                                    )
+                                }
+                            >
+                                Déconnexion
+                            </button>
+                            <button
+                                type="button"
+                                className="primary-button"
+                                onClick={() => {
+                                    setSessionWarningOpen(false);
+                                    setSessionWarningRemainingSeconds(
+                                        SESSION_WARNING_GRACE_SECONDS,
+                                    );
+                                }}
+                            >
+                                Continuer la session
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {accountDetailDialog && user && (
                 <div
                     className="account-detail-backdrop"
@@ -1836,18 +2033,23 @@ export default function App() {
                                         className="payment-modal-button"
                                         onClick={async () => {
                                             setTopupModalOpen(false);
+                                            let confirmByUserFailed = false;
                                             if (topupQrData?.unique_id) {
                                                 try {
                                                     await fetch(
                                                         `/api/kiosk/topup-qr/${topupQrData.unique_id}/confirm-by-user`,
                                                         { method: "POST" },
                                                     );
-                                                } catch {}
+                                                } catch {
+                                                    confirmByUserFailed = true;
+                                                }
                                             }
                                             setTopupQrData(null);
                                             setTopupError("");
                                             setStatus(
-                                                "Demande de top-up enregistree. Verification en attente par le comite.",
+                                                confirmByUserFailed
+                                                    ? "Demande de top-up enregistree. Confirmation utilisateur a verifier par le comite."
+                                                    : "Demande de top-up enregistree. Verification en attente par le comite.",
                                             );
                                         }}
                                     >
