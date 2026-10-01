@@ -78,6 +78,7 @@ server {
   listen 80 default_server;
   listen [::]:80 default_server;
   server_name _;
+  absolute_redirect off;
 
   root $WEB_ROOT;
 
