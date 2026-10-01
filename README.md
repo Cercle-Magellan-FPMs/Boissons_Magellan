@@ -169,6 +169,8 @@ Default runtime paths used by the script:
 - static files: `/var/www/boissons`
 - backups: `/var/backups/boissons`
 
+The daily backup timer keeps SQLite backup files for 30 days across the daily, weekly, monthly, and legacy root folders.
+
 ## Public URLs And Reverse Proxy Routes
 
 Installed by `ops/vm/deploy-host.sh` into the host nginx configuration:

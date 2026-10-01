@@ -52,10 +52,8 @@ if [ "$DOM" = "01" ]; then
   log "Monthly backup created: $MONTHLY_FILE"
 fi
 
-# Rotation: keep ~7 daily, ~8 weekly, ~12 monthly
-find "$DAILY_DIR"   -type f -name "app_*.db" -mtime +7   -delete
-find "$WEEKLY_DIR"  -type f -name "app_*.db" -mtime +60  -delete
-find "$MONTHLY_DIR" -type f -name "app_*.db" -mtime +365 -delete
+# Keep backup files for 30 days, including older files at the backup root.
+find "$BACKUP_ROOT" -type f -name "app_*.db" -mmin +43200 -delete
 
 log "Rotation done"
 log "=== BACKUP END ==="
