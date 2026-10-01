@@ -42,12 +42,14 @@ Price history by product.
 Current stock snapshot.
 - `product_id` PK/FK -> `products.id`
 - `qty`
+- `qty_200`, `qty_500`; `qty = qty_200 + qty_500`
 
 ### stock_moves
 Immutable stock ledger.
 - `id` PK
 - `move_id` grouping id
 - `product_id`, `delta_qty`
+- `delta_qty_200`, `delta_qty_500`; their sum is `delta_qty`
 - `reason` (`sale`, `restock`, `correction`)
 - `ref_id`, `comment`, `ts`
 
@@ -110,4 +112,5 @@ Single-row table (`id = 1`) for kiosk app session behavior.
 - Product/user deletions are soft to preserve historical joins.
 - Order totals are immutable snapshots (`total_cents` + `order_items.unit_price_cents`).
 - Stock is both snapshot (`stock_current`) and audit trail (`stock_moves`).
+- Migration 013 assigns existing quantities to the 200. Kiosk sales consume the 500 first, then the 200. Transfers require sufficient source stock and preserve the total.
 - QR `unique_id` is unique at DB level.

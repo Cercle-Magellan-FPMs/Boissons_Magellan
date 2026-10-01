@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "crypto";
 import { getDB } from "../db/db.js";
+import { sellStock } from "../lib/stock.js";
 
 function getMonthKeyParisLike(date = new Date()) {
   // simple: basé sur la date locale machine (tu mettras TZ Europe/Paris sur RPi)
@@ -86,15 +87,8 @@ export async function orderRoutes(app: FastifyInstance) {
 
       const moveId = randomUUID();
       const insertMove = db.prepare(
-        `INSERT INTO stock_moves (move_id, product_id, delta_qty, reason, ref_id, comment)
-         VALUES (?, ?, ?, 'sale', ?, ?)`
-      );
-
-      const ensureStockRow = db.prepare(
-        `INSERT OR IGNORE INTO stock_current (product_id, qty) VALUES (?, 0)`
-      );
-      const updateStock = db.prepare(
-        `UPDATE stock_current SET qty = qty - ? WHERE product_id = ?`
+        `INSERT INTO stock_moves (move_id, product_id, delta_qty, reason, ref_id, comment, delta_qty_200, delta_qty_500)
+         VALUES (?, ?, ?, 'sale', ?, ?, ?, ?)`
       );
 
       db.prepare(`
@@ -110,9 +104,8 @@ export async function orderRoutes(app: FastifyInstance) {
 
       for (const r of resolved) {
         insertItem.run(orderId, r.product_id, r.qty, r.unit_price_cents);
-        insertMove.run(moveId, r.product_id, -r.qty, orderId, "vente kiosk");
-        ensureStockRow.run(r.product_id);
-        updateStock.run(r.qty, r.product_id);
+        const { delta200, delta500 } = sellStock(db, r.product_id, r.qty);
+        insertMove.run(moveId, r.product_id, -r.qty, orderId, "vente kiosk", delta200, delta500);
       }
 
       return {
@@ -197,18 +190,14 @@ export async function orderRoutes(app: FastifyInstance) {
 
       const moveId = randomUUID();
       const insertMove = db.prepare(
-        `INSERT INTO stock_moves (move_id, product_id, delta_qty, reason, ref_id, comment)
-         VALUES (?, ?, ?, 'sale', ?, ?)`
+        `INSERT INTO stock_moves (move_id, product_id, delta_qty, reason, ref_id, comment, delta_qty_200, delta_qty_500)
+         VALUES (?, ?, ?, 'sale', ?, ?, ?, ?)`
       );
-
-      const ensureStockRow = db.prepare(`INSERT OR IGNORE INTO stock_current (product_id, qty) VALUES (?, 0)`);
-      const updateStock = db.prepare(`UPDATE stock_current SET qty = qty - ? WHERE product_id = ?`);
 
       for (const r of resolved) {
         insertItem.run(orderId, r.product_id, r.qty, r.unit_price_cents);
-        insertMove.run(moveId, r.product_id, -r.qty, orderId, "vente kiosk virement");
-        ensureStockRow.run(r.product_id);
-        updateStock.run(r.qty, r.product_id);
+        const { delta200, delta500 } = sellStock(db, r.product_id, r.qty);
+        insertMove.run(moveId, r.product_id, -r.qty, orderId, "vente kiosk virement", delta200, delta500);
       }
 
       return { order_id: orderId, total_cents: total, user_name: user.name };

@@ -10,6 +10,7 @@ import {
     setProductSlug,
 } from "../../lib/productSlug.js";
 import { requireAdmin } from "./_auth.js";
+import { changeStock, readStock, transferStock } from "../../lib/stock.js";
 
 function csvEscape(value: string) {
     if (/[",\n\r]/.test(value)) {
@@ -156,6 +157,8 @@ export async function adminRoutes(app: FastifyInstance) {
         p.name,
         p.is_active,
         COALESCE(sc.qty, 0) AS qty,
+        COALESCE(sc.qty_200, 0) AS qty_200,
+        COALESCE(sc.qty_500, 0) AS qty_500,
         (
           SELECT pp.price_cents
           FROM product_prices pp
@@ -224,16 +227,14 @@ export async function adminRoutes(app: FastifyInstance) {
 
             if (typeof initial_qty === "number" && initial_qty > 0) {
                 const moveId = randomUUID();
-                db.prepare(
-                    `UPDATE stock_current SET qty = qty + ? WHERE product_id = ?`,
-                ).run(initial_qty, p.id);
+                changeStock(db, p.id, initial_qty, 0);
 
                 db.prepare(
                     `
-          INSERT INTO stock_moves (move_id, product_id, delta_qty, reason, ref_id, comment)
-          VALUES (?, ?, ?, 'restock', NULL, ?)
+          INSERT INTO stock_moves (move_id, product_id, delta_qty, reason, ref_id, comment, delta_qty_200, delta_qty_500)
+          VALUES (?, ?, ?, 'restock', NULL, ?, ?, 0)
         `,
-                ).run(moveId, p.id, initial_qty, "stock initial");
+                ).run(moveId, p.id, initial_qty, "stock initial 200", initial_qty);
             }
 
             if (typeof price_cents === "number") {
@@ -265,6 +266,37 @@ export async function adminRoutes(app: FastifyInstance) {
             }
             return reply.code(500).send({ error: "Internal error" });
         }
+    });
+
+    app.post("/api/admin/products/:id/transfer", async (req, reply) => {
+        try {
+            requireAdmin(req);
+        } catch (e: any) {
+            return reply.code(e.statusCode ?? 500).send({ error: e.message });
+        }
+
+        const params = z.object({ id: z.coerce.number().int().positive() }).safeParse(req.params);
+        const body = z.object({ from: z.enum(["200", "500"]), qty: z.number().int().positive() }).safeParse(req.body);
+        if (!params.success || !body.success) return reply.code(400).send({ error: "Invalid payload" });
+
+        const db = getDB();
+        const tx = db.transaction(() => {
+            const exists = db.prepare("SELECT 1 FROM products WHERE id = ? AND deleted_at IS NULL").get(params.data.id);
+            if (!exists) return "missing";
+            if (!transferStock(db, params.data.id, body.data.from, body.data.qty)) return "insufficient";
+
+            const delta200 = body.data.from === "200" ? -body.data.qty : body.data.qty;
+            db.prepare(`INSERT INTO stock_moves
+                (move_id, product_id, delta_qty, reason, ref_id, comment, delta_qty_200, delta_qty_500)
+                VALUES (?, ?, 0, 'correction', NULL, ?, ?, ?)`)
+                .run(randomUUID(), params.data.id, `Transvasement ${body.data.from} vers ${body.data.from === "200" ? "500" : "200"}`, delta200, -delta200);
+            return readStock(db, params.data.id);
+        });
+
+        const result = tx();
+        if (result === "missing") return reply.code(404).send({ error: "Produit introuvable" });
+        if (result === "insufficient") return reply.code(409).send({ error: "Stock insuffisant au lieu de départ" });
+        return reply.send({ ok: true, stock: result });
     });
 
     // Toggle / rename product (disable = hide from kiosk)
@@ -478,6 +510,8 @@ export async function adminRoutes(app: FastifyInstance) {
         p.id AS product_id,
         p.name AS product_name,
         COALESCE(sc.qty, 0) AS qty,
+        COALESCE(sc.qty_200, 0) AS qty_200,
+        COALESCE(sc.qty_500, 0) AS qty_500,
         p.is_active
       FROM products p
       LEFT JOIN stock_current sc ON sc.product_id = p.id
@@ -489,15 +523,19 @@ export async function adminRoutes(app: FastifyInstance) {
             product_id: number;
             product_name: string;
             qty: number;
+            qty_200: number;
+            qty_500: number;
             is_active: number;
         }>;
 
         const lines = [
-            "product_id,product_name,qty,is_active",
+            "product_id,product_name,qty_200,qty_500,qty,is_active",
             ...rows.map((row) =>
                 [
                     String(row.product_id),
                     csvEscape(row.product_name),
+                    String(Number(row.qty_200 ?? 0)),
+                    String(Number(row.qty_500 ?? 0)),
                     String(Number(row.qty ?? 0)),
                     String(Number(row.is_active ?? 0)),
                 ].join(","),
@@ -535,10 +573,13 @@ export async function adminRoutes(app: FastifyInstance) {
         const header = (rows[0] ?? []).map((value) =>
             value.trim().toLowerCase(),
         );
-        if (!header.includes("qty"))
+        const splitStock = header.includes("qty_200") && header.includes("qty_500");
+        if (header.includes("qty_200") !== header.includes("qty_500"))
+            return reply.code(400).send({ error: "Colonnes qty_200 et qty_500 requises ensemble" });
+        if (!splitStock && !header.includes("qty"))
             return reply
                 .code(400)
-                .send({ error: "Colonne obligatoire manquante: qty" });
+                .send({ error: "Colonne obligatoire manquante: qty ou qty_200 et qty_500" });
         if (
             !header.includes("product_id") &&
             !header.includes("product_name")
@@ -554,18 +595,9 @@ export async function adminRoutes(app: FastifyInstance) {
 
         const tx = db.transaction(() => {
             const moveId = randomUUID();
-            const ensureStockRow = db.prepare(
-                `INSERT OR IGNORE INTO stock_current (product_id, qty) VALUES (?, 0)`,
-            );
-            const readQty = db.prepare(
-                `SELECT COALESCE(qty, 0) AS qty FROM stock_current WHERE product_id = ?`,
-            );
-            const updateStock = db.prepare(
-                `UPDATE stock_current SET qty = ? WHERE product_id = ?`,
-            );
             const insertMove = db.prepare(`
-        INSERT INTO stock_moves (move_id, product_id, delta_qty, reason, ref_id, comment)
-        VALUES (?, ?, ?, ?, NULL, ?)
+        INSERT INTO stock_moves (move_id, product_id, delta_qty, reason, ref_id, comment, delta_qty_200, delta_qty_500)
+        VALUES (?, ?, ?, ?, NULL, ?, ?, ?)
       `);
 
             for (let index = 1; index < rows.length; index += 1) {
@@ -582,13 +614,11 @@ export async function adminRoutes(app: FastifyInstance) {
                 }
 
                 try {
-                    const targetQty = Number(record.qty);
-                    if (
-                        !Number.isFinite(targetQty) ||
-                        !Number.isInteger(targetQty)
-                    ) {
-                        throw new Error("qty invalide");
-                    }
+                    const readInteger = (key: string) => {
+                        const value = Number(record[key]);
+                        if (record[key] === "" || !Number.isSafeInteger(value)) throw new Error(`${key} invalide`);
+                        return value;
+                    };
 
                     let product: { id: number; name: string } | undefined;
                     if (record.product_id) {
@@ -631,25 +661,27 @@ export async function adminRoutes(app: FastifyInstance) {
 
                     if (!product) throw new Error("Produit introuvable");
 
-                    ensureStockRow.run(product.id);
-                    const currentQtyRow = readQty.get(product.id) as
-                        | { qty: number }
-                        | undefined;
-                    const currentQty = Number(currentQtyRow?.qty ?? 0);
-                    const delta = targetQty - currentQty;
+                    const current = readStock(db, product.id);
+                    const target200 = splitStock ? readInteger("qty_200") : current.qty_200 + readInteger("qty") - current.qty;
+                    const target500 = splitStock ? readInteger("qty_500") : current.qty_500;
+                    const delta200 = target200 - current.qty_200;
+                    const delta500 = target500 - current.qty_500;
+                    const delta = delta200 + delta500;
 
-                    if (delta === 0) {
+                    if (delta200 === 0 && delta500 === 0) {
                         counters.unchanged += 1;
                         continue;
                     }
 
-                    updateStock.run(targetQty, product.id);
+                    changeStock(db, product.id, delta200, delta500);
                     insertMove.run(
                         moveId,
                         product.id,
                         delta,
                         delta > 0 ? "restock" : "correction",
                         parsed.data.comment?.trim() || "import csv stocks",
+                        delta200,
+                        delta500,
                     );
                     counters.updated += 1;
                 } catch (error: unknown) {
@@ -692,27 +724,22 @@ export async function adminRoutes(app: FastifyInstance) {
                 )
                 .min(1),
             comment: z.string().optional(),
+            location: z.enum(["200", "500"]).default("200"),
         });
 
         const parsed = schema.safeParse(req.body);
         if (!parsed.success)
             return reply.code(400).send({ error: "Invalid payload" });
 
-        const { items, comment } = parsed.data;
+        const { items, comment, location } = parsed.data;
         const db = getDB();
 
         const tx = db.transaction(() => {
             const moveId = randomUUID();
 
-            const ensureStockRow = db.prepare(
-                `INSERT OR IGNORE INTO stock_current (product_id, qty) VALUES (?, 0)`,
-            );
-            const updateStock = db.prepare(
-                `UPDATE stock_current SET qty = qty + ? WHERE product_id = ?`,
-            );
             const insertMove = db.prepare(`
-        INSERT INTO stock_moves (move_id, product_id, delta_qty, reason, ref_id, comment)
-        VALUES (?, ?, ?, ?, NULL, ?)
+        INSERT INTO stock_moves (move_id, product_id, delta_qty, reason, ref_id, comment, delta_qty_200, delta_qty_500)
+        VALUES (?, ?, ?, ?, NULL, ?, ?, ?)
       `);
 
             for (const it of items) {
@@ -725,8 +752,13 @@ export async function adminRoutes(app: FastifyInstance) {
                     .get(it.product_id);
                 if (!exists) throw new Error("PRODUCT_NOT_FOUND");
 
-                ensureStockRow.run(it.product_id);
-                updateStock.run(it.qty, it.product_id);
+                const stock = readStock(db, it.product_id);
+                if (it.qty < 0 && stock[location === "200" ? "qty_200" : "qty_500"] < -it.qty) {
+                    throw new Error("INSUFFICIENT_STOCK");
+                }
+                const delta200 = location === "200" ? it.qty : 0;
+                const delta500 = location === "500" ? it.qty : 0;
+                changeStock(db, it.product_id, delta200, delta500);
                 const reason = it.qty > 0 ? "restock" : "correction";
                 insertMove.run(
                     moveId,
@@ -734,6 +766,8 @@ export async function adminRoutes(app: FastifyInstance) {
                     it.qty,
                     reason,
                     comment ?? null,
+                    delta200,
+                    delta500,
                 );
             }
 
@@ -746,6 +780,9 @@ export async function adminRoutes(app: FastifyInstance) {
         } catch (e: any) {
             if (String(e?.message || "").includes("PRODUCT_NOT_FOUND")) {
                 return reply.code(404).send({ error: "Product not found" });
+            }
+            if (String(e?.message || "").includes("INSUFFICIENT_STOCK")) {
+                return reply.code(409).send({ error: "Stock insuffisant au lieu choisi" });
             }
             return reply.code(500).send({ error: "Internal error" });
         }
@@ -803,14 +840,14 @@ export async function adminRoutes(app: FastifyInstance) {
         const stocks = db
             .prepare(
                 `
-      SELECT sc.product_id, sc.qty
+      SELECT sc.product_id, sc.qty, sc.qty_200, sc.qty_500
       FROM stock_current sc
       JOIN products p ON p.id = sc.product_id
       WHERE p.deleted_at IS NULL
-        AND sc.qty != 0
+        AND (sc.qty_200 != 0 OR sc.qty_500 != 0)
     `,
             )
-            .all() as Array<{ product_id: number; qty: number }>;
+            .all() as Array<{ product_id: number; qty: number; qty_200: number; qty_500: number }>;
 
         if (stocks.length === 0) {
             return reply.send({
@@ -822,21 +859,20 @@ export async function adminRoutes(app: FastifyInstance) {
 
         const tx = db.transaction(() => {
             const moveId = randomUUID();
-            const updateStock = db.prepare(
-                `UPDATE stock_current SET qty = 0 WHERE product_id = ?`,
-            );
             const insertMove = db.prepare(`
-        INSERT INTO stock_moves (move_id, product_id, delta_qty, reason, ref_id, comment)
-        VALUES (?, ?, ?, 'correction', NULL, ?)
+        INSERT INTO stock_moves (move_id, product_id, delta_qty, reason, ref_id, comment, delta_qty_200, delta_qty_500)
+        VALUES (?, ?, ?, 'correction', NULL, ?, ?, ?)
       `);
 
             for (const s of stocks) {
-                updateStock.run(s.product_id);
+                changeStock(db, s.product_id, -s.qty_200, -s.qty_500);
                 insertMove.run(
                     moveId,
                     s.product_id,
                     -s.qty,
                     "reset complet du stock",
+                    -s.qty_200,
+                    -s.qty_500,
                 );
             }
 
@@ -880,7 +916,7 @@ export async function adminRoutes(app: FastifyInstance) {
             .prepare(
                 `
       SELECT sm.id, sm.move_id, sm.ts, sm.product_id, p.name AS product_name,
-             sm.delta_qty, sm.reason, sm.comment,
+             sm.delta_qty, sm.delta_qty_200, sm.delta_qty_500, sm.reason, sm.comment,
              u.name AS user_name
       FROM stock_moves sm
       JOIN products p ON p.id = sm.product_id
@@ -920,7 +956,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
         const db = getDB();
         const move = db.prepare(`
-            SELECT sm.id, sm.product_id, sm.delta_qty, sm.reason, sm.ref_id, sm.move_id,
+            SELECT sm.id, sm.product_id, sm.delta_qty, sm.delta_qty_200, sm.delta_qty_500, sm.reason, sm.ref_id, sm.move_id,
                    p.name AS product_name
             FROM stock_moves sm
             JOIN products p ON p.id = sm.product_id
@@ -931,16 +967,18 @@ export async function adminRoutes(app: FastifyInstance) {
 
         const undoMoveId = randomUUID();
         const tx = db.transaction(() => {
-            // Annuler la variation de stock
-            db.prepare(`UPDATE stock_current SET qty = qty - ? WHERE product_id = ?`)
-                .run(move.delta_qty, move.product_id);
+            const alreadyUndone = db.prepare(`SELECT 1 FROM stock_moves
+                WHERE reason = 'correction' AND comment LIKE ? LIMIT 1`)
+                .get(`Annulation vente #${move.id} (%)`);
+            if (alreadyUndone) throw new Error("ALREADY_UNDONE");
+            changeStock(db, move.product_id, -move.delta_qty_200, -move.delta_qty_500);
 
             // Enregistrer la correction
             db.prepare(`
-                INSERT INTO stock_moves (move_id, product_id, delta_qty, reason, ref_id, comment)
-                VALUES (?, ?, ?, 'correction', ?, ?)
+                INSERT INTO stock_moves (move_id, product_id, delta_qty, reason, ref_id, comment, delta_qty_200, delta_qty_500)
+                VALUES (?, ?, ?, 'correction', ?, ?, ?, ?)
             `).run(undoMoveId, move.product_id, -move.delta_qty, move.ref_id,
-                `Annulation vente #${move.id} (${move.product_name})`);
+                `Annulation vente #${move.id} (${move.product_name})`, -move.delta_qty_200, -move.delta_qty_500);
 
             // Annuler la commande si elle existe
             if (move.ref_id) {
@@ -948,7 +986,12 @@ export async function adminRoutes(app: FastifyInstance) {
             }
         });
 
-        tx();
+        try {
+            tx();
+        } catch (e: any) {
+            if (String(e?.message).includes("ALREADY_UNDONE")) return reply.code(409).send({ error: "Vente déjà annulée" });
+            throw e;
+        }
         return reply.send({ ok: true, undo_move_id: undoMoveId });
     });
 }

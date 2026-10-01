@@ -3,6 +3,8 @@ export type AdminProduct = {
     name: string;
     is_active: number; // 1/0
     qty: number;
+    qty_200: number;
+    qty_500: number;
     price_cents: number | null;
     image_slug?: string | null;
 };

@@ -146,6 +146,23 @@ export default function ProductsPage() {
         }
     }
 
+    async function transferProduct(p: AdminProduct, form: HTMLFormElement) {
+        const data = new FormData(form);
+        const from = String(data.get("from"));
+        const qty = Number(data.get("qty"));
+        if (!Number.isSafeInteger(qty) || qty <= 0) return alert("Quantité invalide");
+        try {
+            await api(`/api/admin/products/${p.id}/transfer`, {
+                method: "POST",
+                body: JSON.stringify({ from, qty }),
+            });
+            form.reset();
+            await load();
+        } catch (e: any) {
+            alert(e.message);
+        }
+    }
+
     async function resetAllStock() {
         const firstConfirm = confirm(
             "⚠️ Es-tu sûr de vouloir remettre TOUT LE STOCK À ZÉRO ?\n\n" +
@@ -216,7 +233,7 @@ export default function ProductsPage() {
                         style={{ padding: 8, width: 110 }}
                     />
 
-                    <p>Quantité initiale :</p>
+                    <p>Quantité initiale (200) :</p>
                     <input
                         type="number"
                         value={newQty}
@@ -333,6 +350,21 @@ export default function ProductsPage() {
                                     <span className="actions-dots" aria-hidden="true">⋯</span>
                                 </summary>
                                 <div className="item-actions-content">
+                                <div className="stock-breakdown">
+                                    <strong>200 : {p.qty_200}</strong>
+                                    <strong>500 : {p.qty_500}</strong>
+                                </div>
+                                <form className="transfer-form" onSubmit={(e) => {
+                                    e.preventDefault();
+                                    void transferProduct(p, e.currentTarget);
+                                }}>
+                                    <label>De <select name="from" defaultValue="200">
+                                        <option value="200">200 vers 500</option>
+                                        <option value="500">500 vers 200</option>
+                                    </select></label>
+                                    <label>Quantité <input name="qty" type="number" min="1" step="1" required /></label>
+                                    <button type="submit">Transvaser</button>
+                                </form>
                                 <button onClick={() => rename(p)}>
                                     Renommer
                                 </button>

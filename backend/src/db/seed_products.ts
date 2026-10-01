@@ -24,8 +24,8 @@ function upsertProduct(name: string, priceCents: number, qty: number) {
 
   // Stock current
   db.prepare(
-    `INSERT OR IGNORE INTO stock_current (product_id, qty) VALUES (?, ?)`
-  ).run(product.id, qty);
+    `INSERT OR IGNORE INTO stock_current (product_id, qty, qty_200) VALUES (?, ?, ?)`
+  ).run(product.id, qty, qty);
 
   // Si déjà présent, on ne force pas (tu peux changer si tu veux)
 }

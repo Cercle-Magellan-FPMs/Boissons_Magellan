@@ -1,0 +1,7 @@
+ALTER TABLE stock_current ADD COLUMN qty_200 INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE stock_current ADD COLUMN qty_500 INTEGER NOT NULL DEFAULT 0;
+UPDATE stock_current SET qty_200 = qty;
+
+ALTER TABLE stock_moves ADD COLUMN delta_qty_200 INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE stock_moves ADD COLUMN delta_qty_500 INTEGER NOT NULL DEFAULT 0;
+UPDATE stock_moves SET delta_qty_200 = delta_qty;

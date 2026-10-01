@@ -36,6 +36,7 @@ export default function RestockPage() {
     const [lines, setLines] = useState<Line[]>([{ product_id: 0, qty: 1 }]);
     const [searches, setSearches] = useState<string[]>([""]);
     const [comment, setComment] = useState("");
+    const [location, setLocation] = useState<"200" | "500">("200");
     const [msg, setMsg] = useState("");
     const [csvBusy, setCsvBusy] = useState(false);
     const [moves, setMoves] = useState<StockMove[]>([]);
@@ -148,10 +149,10 @@ export default function RestockPage() {
 
         for (const l of validLines) {
             const p = freshProducts.find((pp) => pp.id === l.product_id);
-            const stock = p?.qty ?? 0;
+            const stock = location === "200" ? (p?.qty_200 ?? 0) : (p?.qty_500 ?? 0);
             if (l.qty < 0 && Math.abs(l.qty) > stock) {
                 return setMsg(
-                    `Correction impossible: "${p?.name ?? "Produit"}" stock=${stock}, tu veux retirer ${Math.abs(l.qty)}.`,
+                    `Correction impossible: "${p?.name ?? "Produit"}" stock ${location}=${stock}, tu veux retirer ${Math.abs(l.qty)}.`,
                 );
             }
         }
@@ -163,6 +164,7 @@ export default function RestockPage() {
                     method: "POST",
                     body: JSON.stringify({
                         items: validLines,
+                        location,
                         comment /*, reason: "correction"*/,
                     }),
                 },
@@ -266,6 +268,13 @@ export default function RestockPage() {
                 }}
             >
                 <div style={{ display: "grid", gap: 10 }}>
+                    <label>
+                        Stock concerné :{" "}
+                        <select value={location} onChange={(e) => setLocation(e.target.value as "200" | "500")}>
+                            <option value="200">200</option>
+                            <option value="500">500</option>
+                        </select>
+                    </label>
                     <div
                         style={{
                             display: "flex",
@@ -303,7 +312,7 @@ export default function RestockPage() {
                         const product = products.find(
                             (p) => p.id === l.product_id,
                         );
-                        const stockQty = product?.qty ?? 0;
+                        const stockQty = location === "200" ? (product?.qty_200 ?? 0) : (product?.qty_500 ?? 0);
                         const search = searches[i] ?? "";
                         const filteredProducts = search.trim()
                             ? products.filter((p) =>
@@ -390,7 +399,7 @@ export default function RestockPage() {
                                                     <span
                                                         style={{ opacity: 0.7 }}
                                                     >
-                                                        stock: {p.qty}
+                                                        stock {location}: {location === "200" ? p.qty_200 : p.qty_500}
                                                     </span>
                                                 </button>
                                             ))}

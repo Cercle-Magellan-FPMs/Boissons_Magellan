@@ -3,6 +3,7 @@ import { createHmac, randomBytes, randomUUID } from "crypto";
 import { z } from "zod";
 import QRCode from "qrcode";
 import { getDB } from "../db/db.js";
+import { sellStock } from "../lib/stock.js";
 import { requireAdmin } from "./admin/_auth.js";
 import { sendMail } from "../lib/mailer.js";
 
@@ -445,15 +446,8 @@ export async function qrCodeRoutes(app: FastifyInstance) {
 
                 const moveId = randomBytes(16).toString("hex");
                 const insertMove = db.prepare(
-                    `INSERT INTO stock_moves (move_id, product_id, delta_qty, reason, ref_id, comment)
-           VALUES (?, ?, ?, 'sale', ?, ?)`,
-                );
-
-                const ensureStockRow = db.prepare(
-                    `INSERT OR IGNORE INTO stock_current (product_id, qty) VALUES (?, 0)`,
-                );
-                const updateStock = db.prepare(
-                    `UPDATE stock_current SET qty = qty - ? WHERE product_id = ?`,
+                    `INSERT INTO stock_moves (move_id, product_id, delta_qty, reason, ref_id, comment, delta_qty_200, delta_qty_500)
+           VALUES (?, ?, ?, 'sale', ?, ?, ?, ?)`,
                 );
 
                 for (const r of resolved) {
@@ -463,15 +457,16 @@ export async function qrCodeRoutes(app: FastifyInstance) {
                         r.qty,
                         r.unit_price_cents,
                     );
+                    const { delta200, delta500 } = sellStock(db, r.product_id, r.qty);
                     insertMove.run(
                         moveId,
                         r.product_id,
                         -r.qty,
                         orderId,
                         "vente kiosk paiement QR",
+                        delta200,
+                        delta500,
                     );
-                    ensureStockRow.run(r.product_id);
-                    updateStock.run(r.qty, r.product_id);
                 }
 
                 return { orderId, total };

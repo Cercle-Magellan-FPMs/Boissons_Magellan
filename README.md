@@ -90,7 +90,7 @@ Business concepts implemented in the codebase:
 - Users can have multiple RFID badge IDs mapped to the same account.
 - Unknown kiosk badges can be submitted as pending badge requests for a new user.
 - Users have a prepaid balance (`balance_cents`) that is debited at kiosk checkout.
-- Products have current stock and a price history.
+- Products have stock at the 200 and the 500; the displayed total is their sum. Existing stock is assigned to the 200 by migration.
 - Orders are recorded immediately when placed on the kiosk.
 - Kiosk checkout is prepaid-only: orders are rejected if the balance would go below `0`.
 - Kiosk checkout still authorizes a purchase even when current stock is `0` or negative.
@@ -299,12 +299,15 @@ Products:
 
 Stock / restock:
 
-- `POST /api/admin/restock`
+- `GET /api/admin/products` includes `qty` (total), `qty_200`, and `qty_500`.
+- `POST /api/admin/products/:id/transfer` with `{ "from": "200" | "500", "qty": positive_integer }` moves stock between locations without changing the total. The source must have enough stock.
+- `POST /api/admin/restock` accepts `location: "200" | "500"` (default `200`); corrections and new product initial quantities also affect the 200 by default.
 - `GET /api/admin/stocks/export.csv`
-  - Exports stock list as CSV (`product_id,product_name,qty,is_active`)
+  - Exports stock list as CSV (`product_id,product_name,qty_200,qty_500,qty,is_active`)
 - `POST /api/admin/stocks/import`
   - Imports stock CSV payload `{ csv: string }`
-  - Applies CSV quantities as target stock values per product
+  - With `qty_200` and `qty_500`, applies both as target values and derives the total; the `qty` column is ignored in this case. A legacy `qty`-only CSV adjusts the 200 and preserves the 500.
+- Kiosk sales consume the 500 first, then the 200. Sales remain allowed when the total is negative; the deficit is recorded at the 200. Undo restores the original location quantities.
 
 Debts:
 
@@ -480,8 +483,8 @@ Core tables:
   - includes `payment_date` and `payment_method` metadata for top-ups
 - `products`: drink catalog
 - `product_prices`: price history per product
-- `stock_current`: current stock per product
-- `stock_moves`: inventory movement log
+- `stock_current`: total stock (`qty`) and per-location quantities (`qty_200`, `qty_500`) per product
+- `stock_moves`: inventory movement log with per-location deltas
 - `orders`: committed kiosk orders
 - `order_items`: line items per order
 - `billing_periods`: closed billing windows
