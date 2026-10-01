@@ -10,6 +10,7 @@ Production runtime is host-native:
 - `nginx` serves static `kiosk` / `admin` and proxies `/api/*` to backend.
 - `boissons-backend.service` runs Fastify on port `3000`.
 - SQLite database path: `/var/lib/boissons/app.db`.
+- `boissons-backup.timer` snapshots the SQLite database daily; see `docs/backups.md`.
 
 ## Main Components
 - `backend/src/index.ts`: API bootstrap and route registration.
@@ -24,7 +25,7 @@ Production runtime is host-native:
 1. Badge scan in kiosk.
 2. `POST /api/kiosk/identify` returns user.
 3. `GET /api/kiosk/products` returns catalog + price + stock + image.
-4. `POST /api/kiosk/order` validates balance, creates order, decrements stock, debits account balance.
+4. `POST /api/kiosk/order` validates balance, creates order, decrements stock at the 500 first and then the 200, and debits account balance. The kiosk sees the sum of both locations.
 
 ### 2) Insufficient balance with QR
 1. Kiosk gets 409 on `/api/kiosk/order`.
@@ -40,6 +41,7 @@ Production runtime is host-native:
 
 ## Technical Choices
 - **SQLite**: simple local durability, easy backup/restore.
+- **Split stock**: `stock_current.qty` remains the kiosk-facing total; per-location quantities and movement deltas preserve the 200/500 breakdown. Admin transfers conserve the total.
 - **Migration-first schema**: all persistent changes go through SQL migrations.
 - **Server-side pricing**: order totals are recalculated in backend.
 - **Soft delete on core entities** (`users`, `products`): preserve history integrity.
@@ -49,4 +51,5 @@ Production runtime is host-native:
 ## Related Docs
 - API: `docs/api.md`
 - Data model: `docs/data-model.md`
+- Backups: `docs/backups.md`
 - Architecture decisions: `docs/adr/`

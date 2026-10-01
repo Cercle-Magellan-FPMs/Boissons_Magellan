@@ -169,7 +169,7 @@ Default runtime paths used by the script:
 - static files: `/var/www/boissons`
 - backups: `/var/backups/boissons`
 
-The daily backup timer keeps SQLite backup files for 30 days across the daily, weekly, monthly, and legacy root folders.
+The daily backup timer keeps SQLite backup files for 30 days across the daily, weekly, monthly, and legacy root folders. See `docs/backups.md` for the schedule, scope, and restore check.
 
 ## Public URLs And Reverse Proxy Routes
 
@@ -303,6 +303,7 @@ Stock / restock:
 
 - `GET /api/admin/products` includes `qty` (total), `qty_200`, and `qty_500`.
 - `POST /api/admin/products/:id/transfer` with `{ "from": "200" | "500", "qty": positive_integer }` moves stock between locations without changing the total. The source must have enough stock.
+- In the admin product list, the closed card shows only the total stock; opening Actions shows the 200/500 breakdown and the transfer form.
 - `POST /api/admin/restock` accepts `location: "200" | "500"` (default `200`); corrections and new product initial quantities also affect the 200 by default.
 - `GET /api/admin/stocks/export.csv`
   - Exports stock list as CSV (`product_id,product_name,qty_200,qty_500,qty,is_active`)
@@ -622,7 +623,7 @@ From the repository root:
 - Page Produits : bouton "🗑️ Reset complet du stock (double confirmation)"
   - Double confirmation via popups navigateur
   - Appelle `POST /api/admin/products/reset-stock` avec `{ confirm: true }`
-  - Remet tous les `stock_current.qty` a 0 et enregistre un `stock_moves` par produit (reason=correction, comment="reset complet du stock")
+  - Remet `stock_current.qty`, `qty_200` et `qty_500` a 0 et enregistre un `stock_moves` par produit (reason=correction, comment="reset complet du stock")
 - Page Restock : section "📋 Historique des mouvements de stock"
   - Affiche les 100 derniers mouvements (`GET /api/admin/stock-moves`)
   - Les resets complets sont surlignes en rouge avec la mention "⚠️ RESET COMPLET"

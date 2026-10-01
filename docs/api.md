@@ -45,13 +45,17 @@ Admin endpoints require `x-admin-token`.
 - `POST /api/admin/products/:id/delete`
 - `POST /api/admin/products/:id/transfer`
   - `{ "from": "200" | "500", "qty": positive_integer }`; moves units to the other location without changing the total
+  - returns 409 if the source location has insufficient stock
 
 ### Stock
 - `POST /api/admin/restock`
   - accepts `location: "200" | "500"` (default `200`)
 - `GET /api/admin/stocks/export.csv`
+  - columns: `product_id,product_name,qty_200,qty_500,qty,is_active`
 - `POST /api/admin/stocks/import`
-  - `qty_200` and `qty_500` set both location targets; a legacy `qty`-only CSV adjusts the 200
+  - `qty_200` and `qty_500` set both location targets and derive `qty`; a legacy `qty`-only CSV adjusts the 200 and preserves the 500
+- `POST /api/admin/products/reset-stock`
+  - `{ "confirm": true }`; resets total and both location quantities
 
 ### Users
 - `GET /api/admin/users`

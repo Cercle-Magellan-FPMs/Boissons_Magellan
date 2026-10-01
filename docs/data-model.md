@@ -51,6 +51,7 @@ Immutable stock ledger.
 - `product_id`, `delta_qty`
 - `delta_qty_200`, `delta_qty_500`; their sum is `delta_qty`
 - `reason` (`sale`, `restock`, `correction`)
+- A transfer is logged as `correction` with `delta_qty = 0`, opposite location deltas, and a direction in `comment`.
 - `ref_id`, `comment`, `ts`
 
 ### orders
