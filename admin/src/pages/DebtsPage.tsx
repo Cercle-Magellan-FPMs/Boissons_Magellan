@@ -183,12 +183,12 @@ export default function DebtsPage() {
         {filteredDebts.map((d) => (
           <div
             key={`${d.period_id}-${d.user_id}`}
+            className="debt-card"
             style={{
               border: "1px solid #444",
               borderRadius: 10,
               padding: 10,
               display: "grid",
-              gridTemplateColumns: "2fr 1.4fr 1fr auto",
               gap: 8,
               alignItems: "center",
             }}

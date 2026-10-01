@@ -262,7 +262,7 @@ export default function KioskTabletPage() {
 
       <Panel title="Application kiosk">
         <form onSubmit={saveSessionSettings} style={{ display: "grid", gap: 10 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 1fr) auto", gap: 10, alignItems: "end" }}>
+          <div className="kiosk-session-grid" style={{ display: "grid", gap: 10, alignItems: "end" }}>
             <label style={{ display: "grid", gap: 6 }}>
               <span>Déconnexion après inactivité</span>
               <input
@@ -286,7 +286,7 @@ export default function KioskTabletPage() {
       </Panel>
 
       <Panel title="Connexion FreeKiosk">
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 2fr auto", gap: 10, alignItems: "end" }}>
+        <div className="kiosk-connection-grid" style={{ display: "grid", gap: 10, alignItems: "end" }}>
           <label style={{ display: "grid", gap: 6 }}>
             <span>URL API tablette</span>
             <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="http://172.19.0.9:8080" />
@@ -305,7 +305,7 @@ export default function KioskTabletPage() {
       </Panel>
 
       {status && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 }}>
+        <div className="kiosk-status-grid" style={{ display: "grid", gap: 12 }}>
           <Panel title="Batterie">
             <InfoLine label="Niveau" value={status.battery?.level != null ? `${status.battery.level}%` : undefined} />
             <InfoLine label="Charge" value={status.battery?.charging} />
@@ -330,7 +330,9 @@ export default function KioskTabletPage() {
       )}
 
       <Panel title="Actions rapides">
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <details className="item-actions">
+          <summary>Afficher les actions</summary>
+          <div className="item-actions-content">
           {quickActions.map((action) => (
             <button
               key={`${action.method || "GET"}-${action.endpoint}`}
@@ -343,17 +345,18 @@ export default function KioskTabletPage() {
               {busy === action.label ? "..." : action.label}
             </button>
           ))}
-        </div>
+          </div>
+        </details>
       </Panel>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="responsive-pair-grid" style={{ display: "grid", gap: 12 }}>
         <Panel title="URL affichée">
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <input
               value={kioskUrl}
               onChange={(e) => setKioskUrl(e.target.value)}
               placeholder="http://172.17.0.7/kiosk/"
-              style={{ minWidth: 320, flex: 1 }}
+              style={{ minWidth: 0, flex: "1 1 220px" }}
             />
             <button onClick={sendUrl} disabled={Boolean(busy)}>Envoyer l'URL</button>
           </div>
@@ -375,17 +378,17 @@ export default function KioskTabletPage() {
         </Panel>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="responsive-pair-grid" style={{ display: "grid", gap: 12 }}>
         <Panel title="Message vocal TTS">
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <input value={ttsText} onChange={(e) => setTtsText(e.target.value)} style={{ minWidth: 260, flex: 1 }} />
+            <input value={ttsText} onChange={(e) => setTtsText(e.target.value)} style={{ minWidth: 0, flex: "1 1 220px" }} />
             <button onClick={sendTts} disabled={Boolean(busy)}>Parler</button>
           </div>
         </Panel>
 
         <Panel title="Toast FreeKiosk">
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <input value={toastText} onChange={(e) => setToastText(e.target.value)} style={{ minWidth: 260, flex: 1 }} />
+            <input value={toastText} onChange={(e) => setToastText(e.target.value)} style={{ minWidth: 0, flex: "1 1 220px" }} />
             <button onClick={sendToast} disabled={Boolean(busy)}>Afficher</button>
           </div>
         </Panel>

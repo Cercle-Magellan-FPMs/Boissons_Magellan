@@ -321,9 +321,9 @@ export default function RestockPage() {
                         return (
                             <div
                                 key={i}
+                                className="restock-line"
                                 style={{
                                     display: "grid",
-                                    gridTemplateColumns: "2fr 1fr auto",
                                     gap: 8,
                                 }}
                             >
@@ -455,6 +455,7 @@ export default function RestockPage() {
                 }}
             >
                 <div
+                    className="restock-history-header"
                     style={{
                         display: "flex",
                         justifyContent: "space-between",
@@ -545,6 +546,7 @@ export default function RestockPage() {
 
                 {moves.length > 0 && (
                     <div
+                        className="restock-history-table"
                         style={{
                             maxHeight: 450,
                             overflowY: "auto",

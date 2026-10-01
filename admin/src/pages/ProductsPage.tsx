@@ -299,9 +299,9 @@ export default function ProductsPage() {
                     {filteredProducts.map((p) => (
                         <div
                             key={p.id}
+                            className="product-card"
                             style={{
                                 display: "grid",
-                                gridTemplateColumns: "2fr 1fr 1fr auto",
                                 gap: 8,
                                 alignItems: "center",
                                 padding: 10,
@@ -327,14 +327,9 @@ export default function ProductsPage() {
                                 <div style={{ opacity: 0.7 }}>Stock</div>
                             </div>
 
-                            <div
-                                style={{
-                                    display: "flex",
-                                    gap: 8,
-                                    justifyContent: "flex-end",
-                                    flexWrap: "wrap",
-                                }}
-                            >
+                            <details className="item-actions">
+                                <summary>Actions</summary>
+                                <div className="item-actions-content">
                                 <button onClick={() => rename(p)}>
                                     Renommer
                                 </button>
@@ -370,7 +365,8 @@ export default function ProductsPage() {
                                 <button onClick={() => removeProduct(p)}>
                                     Supprimer
                                 </button>
-                            </div>
+                                </div>
+                            </details>
                         </div>
                     ))}
 

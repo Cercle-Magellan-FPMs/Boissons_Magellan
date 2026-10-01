@@ -181,6 +181,93 @@
 .page-main {
   display: grid;
   gap: 16px;
+  min-width: 0;
+}
+
+.page-main > * {
+  min-width: 0;
+}
+
+.page-main section > * {
+  min-width: 0;
+}
+
+.page-main input,
+.page-main select,
+.page-main textarea,
+.page-main label {
+  max-width: 100%;
+}
+
+.page-main label:has(input[type="file"]) {
+  flex-wrap: wrap;
+}
+
+.page-main input[type="file"] {
+  width: min(100%, 240px);
+}
+
+.product-card {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
+.product-card,
+.user-card-summary,
+.debt-card {
+  overflow-wrap: anywhere;
+}
+
+.user-card-summary {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.2fr) auto;
+}
+
+.debt-card {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 1fr) auto;
+}
+
+.restock-line {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+}
+
+.email-server-grid {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.responsive-pair-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.kiosk-session-grid {
+  grid-template-columns: minmax(220px, 1fr) auto;
+}
+
+.kiosk-connection-grid {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) auto;
+}
+
+.kiosk-status-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.item-actions summary {
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-2);
+  padding: 10px 16px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.item-actions-content {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.item-actions input[type="file"] {
+  max-width: 100%;
 }
 
 .app-footer {
@@ -251,6 +338,11 @@
     padding: 16px;
   }
 
+  .admin-header {
+    min-height: 0;
+    gap: 12px;
+  }
+
   .brand-logo {
     width: 110px;
   }
@@ -258,5 +350,58 @@
   .token-row {
     grid-template-columns: 1fr;
     align-items: stretch;
+  }
+
+  .product-card,
+  .user-card-summary,
+  .debt-card {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .product-card > :first-child,
+  .user-card-summary > :first-child,
+  .debt-card > :first-child,
+  .product-card > .item-actions,
+  .user-card-summary > :last-child,
+  .debt-card > :last-child {
+    grid-column: 1 / -1;
+  }
+
+  .restock-line {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .email-server-grid,
+  .responsive-pair-grid,
+  .kiosk-session-grid,
+  .kiosk-connection-grid,
+  .kiosk-status-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .restock-line > :first-child {
+    grid-column: 1 / -1;
+  }
+
+  .item-actions-content {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .restock-history-header {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .restock-history-header > div {
+    flex-wrap: wrap;
+  }
+
+  .restock-history-table {
+    overflow-x: auto;
+  }
+
+  .restock-history-table table {
+    min-width: 700px;
   }
 }

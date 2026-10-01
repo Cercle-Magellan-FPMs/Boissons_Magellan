@@ -749,11 +749,10 @@ export default function UsersPage() {
                             >
                                 {/* Compact row */}
                                 <div
+                                    className="user-card-summary"
                                     onClick={() => toggleExpand(u.id)}
                                     style={{
                                         display: "grid",
-                                        gridTemplateColumns:
-                                            "2fr 1fr 1.2fr auto",
                                         gap: 8,
                                         alignItems: "center",
                                         padding: 10,
@@ -976,14 +975,9 @@ export default function UsersPage() {
                                         </div>
 
                                         {/* Action buttons */}
-                                        <div
-                                            style={{
-                                                display: "flex",
-                                                gap: 8,
-                                                flexWrap: "wrap",
-                                                alignItems: "center",
-                                            }}
-                                        >
+                                        <details className="item-actions">
+                                            <summary>Autres actions</summary>
+                                            <div className="item-actions-content">
                                             <button onClick={() => rename(u)}>
                                                 ✏️ Renommer
                                             </button>
@@ -1028,7 +1022,8 @@ export default function UsersPage() {
                                             >
                                                 🗑️ Supprimer
                                             </button>
-                                        </div>
+                                            </div>
+                                        </details>
                                     </div>
                                 )}
                             </div>

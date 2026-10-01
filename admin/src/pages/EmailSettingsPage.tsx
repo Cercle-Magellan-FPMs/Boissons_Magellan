@@ -118,7 +118,7 @@ export default function EmailSettingsPage() {
         <p style={{ opacity: 0.75 }}>Chargement...</p>
       ) : (
         <div style={{ padding: 16, border: "1px solid #333", borderRadius: 14, display: "grid", gap: 14 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 10 }}>
+          <div className="email-server-grid" style={{ display: "grid", gap: 10 }}>
             <label style={{ display: "grid", gap: 6 }}>
               <span>Serveur SMTP</span>
               <input
@@ -151,7 +151,7 @@ export default function EmailSettingsPage() {
             </label>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div className="responsive-pair-grid" style={{ display: "grid", gap: 10 }}>
             <label style={{ display: "grid", gap: 6 }}>
               <span>Utilisateur SMTP</span>
               <input
@@ -183,7 +183,7 @@ export default function EmailSettingsPage() {
             />
           </label>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div className="responsive-pair-grid" style={{ display: "grid", gap: 10 }}>
             <label style={{ display: "grid", gap: 6 }}>
               <span>Emails notifiés - Paiement confirmé</span>
               <input
@@ -239,7 +239,7 @@ export default function EmailSettingsPage() {
             value={testTo}
             onChange={(e) => setTestTo(e.target.value)}
             placeholder="adresse@test.be"
-            style={{ minWidth: 260 }}
+            style={{ width: "min(100%, 260px)" }}
           />
           <button onClick={sendTest}>Envoyer un email de test</button>
         </div>
