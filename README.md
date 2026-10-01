@@ -182,8 +182,8 @@ Installed by `ops/vm/deploy-host.sh` into the host nginx configuration:
 
 Current access restrictions in nginx:
 
-- `/admin/` is only allowed from `172.16.0.111`
-- `/api/admin/` is only allowed from `172.16.0.111`
+- `/admin/` and `/api/admin/` are allowed from `172.16.0.111` and the NPM proxy `172.17.0.1`
+- `/kiosk/` and `/products/` reject the NPM proxy `172.17.0.1`
 - `/api/kiosk/` is allowed from `172.20.0.4`, `172.20.0.10`, `172.16.0.111`, and `172.19.0.9`
 
 ## Backend API

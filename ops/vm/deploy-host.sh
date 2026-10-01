@@ -13,7 +13,7 @@ DB_PATH="${DB_PATH:-/var/lib/boissons/app.db}"
 BACKUP_ROOT="${BACKUP_ROOT:-/var/backups/boissons}"
 WEB_ROOT="${WEB_ROOT:-/var/www/boissons}"
 NGINX_SITE_PATH="${NGINX_SITE_PATH:-/etc/nginx/sites-available/boissons-magellan.conf}"
-ADMIN_ALLOW_IPS="${ADMIN_ALLOW_IPS:-172.16.0.111}"
+ADMIN_ALLOW_IPS="${ADMIN_ALLOW_IPS:-172.16.0.111 172.17.0.1}"
 KIOSK_API_ALLOW_IPS="${KIOSK_API_ALLOW_IPS:-172.20.0.4 172.20.0.10 172.16.0.111 172.19.0.9}"
 INSTALL_NODE20="${INSTALL_NODE20:-1}"
 INSTALL_BACKUP_TIMER="${INSTALL_BACKUP_TIMER:-1}"
@@ -90,10 +90,12 @@ server {
   }
 
   location /kiosk/ {
+    deny 172.17.0.1;
     try_files \$uri \$uri/ /kiosk/index.html;
   }
 
   location /products/ {
+    deny 172.17.0.1;
     alias $WEB_ROOT/kiosk/products/;
     try_files \$uri =404;
   }
