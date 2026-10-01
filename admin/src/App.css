@@ -82,6 +82,10 @@
   padding-bottom: 2px;
 }
 
+.mobile-nav {
+  display: none;
+}
+
 .nav-button {
   border-radius: 999px;
   border: 1px solid transparent;
@@ -221,6 +225,22 @@
   justify-content: flex-end;
 }
 
+@media (max-width: 900px) {
+  .admin-nav {
+    display: none;
+  }
+
+  .mobile-nav {
+    display: grid;
+    gap: 6px;
+  }
+
+  .mobile-nav select {
+    width: 100%;
+    min-height: 48px;
+  }
+}
+
 @media (max-width: 720px) {
   .admin-app {
     padding: 16px;
@@ -233,11 +253,6 @@
 
   .brand-logo {
     width: 110px;
-  }
-
-  .admin-nav {
-    flex-wrap: wrap;
-    overflow-x: visible;
   }
 
   .token-row {

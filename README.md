@@ -445,6 +445,7 @@ Purpose:
 Main files:
 
 - `admin/src/App.tsx`: main layout and page navigation
+- On screens up to 900px wide, admin navigation uses a native dropdown menu.
 - `admin/src/lib/api.ts`: fetch wrapper adding `x-admin-token`
 - `admin/src/lib/types.ts`: shared frontend types
 - `admin/src/pages/ProductsPage.tsx`: product listing, creation, rename, price updates, activation, and PNG upload bound to selected product

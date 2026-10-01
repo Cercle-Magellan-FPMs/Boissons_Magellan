@@ -150,6 +150,19 @@ export default function App() {
               Email
             </button>
           </nav>
+          <label className="mobile-nav">
+            <span>Menu</span>
+            <select value={page} onChange={(event) => goTo(event.target.value as Page)}>
+              <option value="products">Produits</option>
+              <option value="restock">Restock</option>
+              <option value="debts">Clôturer</option>
+              <option value="topups">Log des top-ups</option>
+              <option value="users">Utilisateurs</option>
+              <option value="qrcode">QR Code</option>
+              <option value="kiosk-tablette">Tablette</option>
+              <option value="email">Email</option>
+            </select>
+          </label>
         </header>
 
         <main className="page-main">
