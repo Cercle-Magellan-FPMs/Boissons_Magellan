@@ -328,7 +328,10 @@ export default function ProductsPage() {
                             </div>
 
                             <details className="item-actions">
-                                <summary>Actions</summary>
+                                <summary aria-label="Actions" title="Actions">
+                                    <span className="actions-word">Actions</span>
+                                    <span className="actions-dots" aria-hidden="true">⋯</span>
+                                </summary>
                                 <div className="item-actions-content">
                                 <button onClick={() => rename(p)}>
                                     Renommer

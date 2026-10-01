@@ -210,7 +210,10 @@ export default function DebtsPage() {
 
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               {d.status === "invoiced" ? (
-                <button onClick={() => pay(d)} style={{ fontWeight: 900 }}>Marquer paye</button>
+                <button onClick={() => pay(d)} style={{ fontWeight: 900 }}>
+                  <span className="desktop-action-label">Marquer paye</span>
+                  <span className="mobile-action-label">Payé ✓</span>
+                </button>
               ) : (
                 <button onClick={() => unpay(d)}>Annuler</button>
               )}

@@ -803,7 +803,7 @@ export default function UsersPage() {
                                             {u.email ?? "—"}
                                         </div>
                                     </div>
-                                    <div style={{ fontWeight: 900 }}>
+                                        <div style={{ fontWeight: 900 }}>
                                         {eurosFromCents(u.balance_cents)}
                                     </div>
                                     <div style={{ opacity: 0.85 }}>
@@ -811,6 +811,7 @@ export default function UsersPage() {
                                         {badgeCount !== 1 ? "s" : ""}
                                         {badgeCount > 0 && (
                                             <span
+                                                className="badge-uid"
                                                 style={{
                                                     opacity: 0.65,
                                                     marginLeft: 4,
@@ -822,8 +823,9 @@ export default function UsersPage() {
                                     </div>
                                     <div>
                                         <button
+                                            className="user-card-toggle"
+                                            aria-label={isExpanded ? `Réduire ${u.name}` : `Modifier ${u.name}`}
                                             style={{
-                                                padding: "6px 14px",
                                                 border: isExpanded
                                                     ? "2px solid #5a8"
                                                     : "1px solid #5a8",
@@ -839,9 +841,8 @@ export default function UsersPage() {
                                                 whiteSpace: "nowrap",
                                             }}
                                         >
-                                            {isExpanded
-                                                ? "▲ Réduire"
-                                                : "▶ Modifier"}
+                                            <span className="user-toggle-word">{isExpanded ? "▲ Réduire" : "▶ Modifier"}</span>
+                                            <span className="user-toggle-icon" aria-hidden="true">{isExpanded ? "▲" : "✎"}</span>
                                         </button>
                                     </div>
                                 </div>
