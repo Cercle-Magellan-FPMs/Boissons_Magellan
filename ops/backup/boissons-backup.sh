@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+umask 077
 
 DB_PATH="${DB_PATH:-/data/app.db}"
 
@@ -30,7 +31,11 @@ fi
 
 # --- DAILY ---
 DAILY_FILE="$DAILY_DIR/app_${DATE_TS}.db"
-cp "$DB_PATH" "$DAILY_FILE"
+TMP_FILE="${DAILY_FILE}.tmp"
+trap 'rm -f "$TMP_FILE"' EXIT
+sqlite3 "$DB_PATH" ".backup \"$TMP_FILE\""
+test "$(sqlite3 "$TMP_FILE" 'PRAGMA quick_check;')" = ok
+mv "$TMP_FILE" "$DAILY_FILE"
 log "Daily backup created: $DAILY_FILE"
 
 # --- WEEKLY (Sunday) ---
